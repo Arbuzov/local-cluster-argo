@@ -16,17 +16,23 @@ spec:
         extraArgs:
           - --transport
           - streamable-http
-        # Non-secret env (URLs, flags). API token & VPN credentials come
-        # from envFrom secretRefs below — see README.md.
+        # Non-secret env (URLs, flags). API token comes from the
+        # mcp-atlassian-confluence-credentials Secret via envSecrets — the
+        # chart has no envFrom value for the main container, see README.md.
+        # (envFrom inside `sidecars` is fine: sidecars are rendered verbatim.)
         env:
           CONFLUENCE_URL: https://confluence.spacebridge.com
           CONFLUENCE_SSL_VERIFY: 'false'
           MCP_VERY_VERBOSE: true
           MCP_LOGGING_STDOUT: true
           TRANSPORT: streamable-http
-        envFrom:
-          - secretRef:
-              name: mcp-atlassian-confluence-credentials
+        envSecrets:
+          CONFLUENCE_USERNAME:
+            name: mcp-atlassian-confluence-credentials
+            key: CONFLUENCE_USERNAME
+          CONFLUENCE_API_TOKEN:
+            name: mcp-atlassian-confluence-credentials
+            key: CONFLUENCE_API_TOKEN
         livenessProbe:
           enabled: false
         readinessProbe:
