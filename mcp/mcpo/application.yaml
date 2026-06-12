@@ -42,12 +42,15 @@ spec:
               - -y
               - '@modelcontextprotocol/server-memory'
               command: npx
+            # The atlassian servers speak streamable-http (not SSE) and live
+            # under /mcp/<name>. Keep the trailing slash: the server 307s the
+            # slashless form and mcpo's client doesn't follow POST redirects.
             jira:
-              type: sse
-              url: http://mcp-atlassian-jira:8000/sse
+              type: streamable_http
+              url: http://mcp-atlassian-jira:8000/mcp/jira/
             confluence:
-              type: sse
-              url: http://mcp-atlassian-confluence:8000/sse
+              type: streamable_http
+              url: http://mcp-atlassian-confluence:8000/mcp/confluence/
             home-assistant:
               type: sse
               url: http://192.168.99.89:8123/mcp_server/sse
