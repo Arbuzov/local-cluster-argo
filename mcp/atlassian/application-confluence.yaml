@@ -58,7 +58,7 @@ spec:
               - name: URL
                 value: "https://asa.spacebridge.com"
               - name: AUTH_GROUP
-                value: VPN_THROUGTH
+                value: VPN_THROUGHT
               - name: EXTRA_ARGS
                 value: '--servercert pin-sha256:2xCM3h9AhLPa83cT8SToVrRPm2Ui84bHlW4VaPrE91s='
               # The openconnect image wants USER/PASS; the out-of-band secret
