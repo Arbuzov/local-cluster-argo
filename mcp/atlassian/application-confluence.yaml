@@ -61,9 +61,18 @@ spec:
                 value: VPN_THROUGTH
               - name: EXTRA_ARGS
                 value: '--servercert pin-sha256:uUSuxlR7/XsvkUStQFLeE0rJNrPf25XfPNMEbPLFKVs='
-            envFrom:
-              - secretRef:
-                  name: mcp-atlassian-vpn-credentials
+              # The openconnect image wants USER/PASS; the out-of-band secret
+              # stores USERNAME/PASSWORD, so map the keys explicitly.
+              - name: USER
+                valueFrom:
+                  secretKeyRef:
+                    name: mcp-atlassian-vpn-credentials
+                    key: USERNAME
+              - name: PASS
+                valueFrom:
+                  secretKeyRef:
+                    name: mcp-atlassian-vpn-credentials
+                    key: PASSWORD
             securityContext:
               privileged: true
               capabilities:

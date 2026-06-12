@@ -24,10 +24,11 @@ kubectl -n mcp create secret generic mcp-atlassian-confluence-credentials \
   --from-literal=CONFLUENCE_USERNAME='<your-atlassian-username>' \
   --from-literal=CONFLUENCE_API_TOKEN='<your-atlassian-api-token>'
 
-# OpenConnect VPN credentials for the Confluence sidecar
+# OpenConnect VPN credentials for the Confluence sidecar (the manifest
+# maps USERNAME/PASSWORD onto the USER/PASS env vars the image expects)
 kubectl -n mcp create secret generic mcp-atlassian-vpn-credentials \
-  --from-literal=USER='<your-vpn-username>' \
-  --from-literal=PASS='<your-vpn-password>'
+  --from-literal=USERNAME='<your-vpn-username>' \
+  --from-literal=PASSWORD='<your-vpn-password>'
 ```
 
 The Atlassian Cloud "API token" is generated at
