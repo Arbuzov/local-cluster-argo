@@ -13,9 +13,9 @@ everything under `mcp/` automatically.
 | [`root.yaml`](root.yaml) | `Application` | The **app-of-apps** — deploys `project.yaml` + every child app |
 | `<service>/application*.yaml` | `Application` | One MCP server each (`project: mcp`) |
 
-Services: `atlassian` (Jira + Confluence), `basic-memory`, `graphiti`,
-`homeassistant`, `kubernetes`, `mcpo`. Each has its own `README.md` for the
-out-of-band Secrets it expects.
+Services: `atlassian` (Jira + Confluence), `basic-memory`, `gitlab`,
+`graphiti`, `homeassistant`, `kubernetes`, `mcpo`. Each has its own
+`README.md` for the out-of-band Secrets it expects.
 
 ## How it deploys (app-of-apps)
 

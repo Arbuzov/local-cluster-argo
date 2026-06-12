@@ -1,0 +1,92 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mcp-gitlab
+  namespace: argo-cd
+  finalizers:  # cascade-delete this app's resources when removed from the app-of-apps; see mcp/README.md
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: mcp
+  source:
+    repoURL: https://arbuzov.github.io/mcp-helm/
+    targetRevision: 0.3.4
+    chart: mcp-gitlab
+    helm:
+      values: |
+        # Non-secret env only. GITLAB_PERSONAL_ACCESS_TOKEN comes from the
+        # mcp-gitlab-credentials Secret via envSecrets, see README.md.
+        env:
+          GITLAB_API_URL: https://gitlab.asatnet.net/api/v4
+          STREAMABLE_HTTP: 'true'
+          GITLAB_READ_ONLY_MODE: 'false'
+          USE_GITLAB_WIKI: 'false'
+          USE_MILESTONE: 'false'
+          USE_PIPELINE: 'false'
+          # GitLab presents a private-CA cert (Headless Root CA) the image
+          # does not trust; "0" is the only value Node honors to disable
+          # verification (the previous "true" silently did nothing).
+          NODE_TLS_REJECT_UNAUTHORIZED: '0'
+        envSecrets:
+          GITLAB_PERSONAL_ACCESS_TOKEN:
+            secretName: mcp-gitlab-credentials
+            secretKey: GITLAB_PERSONAL_ACCESS_TOKEN
+        # gitlab.asatnet.net only exists in corp DNS, which the cluster (and
+        # the VPN sidecar's resolver) cannot reach — pin the address so the
+        # app container resolves it. gitlab.asatnet.net = zeus-1.asatnet.net.
+        hostAliases:
+          - ip: 192.168.8.156
+            hostnames:
+              - gitlab.asatnet.net
+        ingress:
+          enabled: true
+          className: nginx
+          annotations:
+            nginx.ingress.kubernetes.io/auth-type: basic
+            nginx.ingress.kubernetes.io/auth-secret: mcp-basic-auth
+            nginx.ingress.kubernetes.io/auth-realm: "Authentication Required"
+            # gitlab-mcp ignores --path-prefix and always serves /mcp, so
+            # rewrite /mcp/gitlab/... onto it (same shape as the jira and
+            # confluence apps; remote MCP clients don't follow 307s either).
+            nginx.ingress.kubernetes.io/rewrite-target: /mcp$2
+          path: /mcp/gitlab
+          hosts:
+            - dev.whitediver.keenetic.link
+            - "*"
+        # Same OpenConnect sidecar as the confluence app — GitLab lives
+        # behind the corp VPN. Reuses the shared VPN credentials Secret.
+        sidecars:
+          - name: vpn-sidecar
+            image: docker.io/aw1cks/openconnect
+            env:
+              - name: URL
+                value: "https://asa.spacebridge.com"
+              - name: AUTH_GROUP
+                value: VPN_THROUGHT
+              - name: EXTRA_ARGS
+                value: '--servercert pin-sha256:2xCM3h9AhLPa83cT8SToVrRPm2Ui84bHlW4VaPrE91s='
+              # The openconnect image wants USER/PASS; the out-of-band secret
+              # stores USERNAME/PASSWORD, so map the keys explicitly.
+              - name: USER
+                valueFrom:
+                  secretKeyRef:
+                    name: mcp-atlassian-vpn-credentials
+                    key: USERNAME
+              - name: PASS
+                valueFrom:
+                  secretKeyRef:
+                    name: mcp-atlassian-vpn-credentials
+                    key: PASSWORD
+            securityContext:
+              privileged: true
+              capabilities:
+                add:
+                  - NET_ADMIN
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mcp
+  syncPolicy:
+    automated:
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
