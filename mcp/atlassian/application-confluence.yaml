@@ -58,7 +58,7 @@ spec:
               - name: URL
                 value: "https://asa.spacebridge.com"
               - name: AUTH_GROUP
-                value: DUO
+                value: VPN_THROUGTH
               - name: EXTRA_ARGS
                 value: '--servercert pin-sha256:uUSuxlR7/XsvkUStQFLeE0rJNrPf25XfPNMEbPLFKVs='
             envFrom:
