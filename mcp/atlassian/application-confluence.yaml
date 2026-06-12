@@ -3,7 +3,7 @@ kind: Application
 metadata:
   name: mcp-atlassian-confluence
   namespace: argo-cd
-  finalizers:  # cascade-delete this app's resources when removed from the app-of-apps; see mcp/README.md
+  finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
   project: mcp
@@ -16,20 +16,10 @@ spec:
         extraArgs:
           - --transport
           - streamable-http
-          # Stateless: don't tie requests to an in-memory session. With the
-          # default stateful mode every pod restart invalidated all client
-          # sessions and SDK 1.9.4 answered them 400 (not the spec's 404), so
-          # remote clients (claude.ai connector) got stuck erroring forever.
           - --stateless
-        # 0.21.1: first upstream release line with --stateless; the chart's
-        # default 0.11.9 (SDK 1.9.4) predates it.
         image:
-          repository: ghcr.io/sooperset/mcp-atlassian
-          tag: 0.21.1
-        # Non-secret env (URLs, flags). API token comes from the
-        # mcp-atlassian-confluence-credentials Secret via envSecrets — the
-        # chart has no envFrom value for the main container, see README.md.
-        # (envFrom inside `sidecars` is fine: sidecars are rendered verbatim.)
+          repository: ghcr.io/arbuzov/mcp-atlassian
+          tag: 0.21.1-fork.1
         env:
           CONFLUENCE_URL: https://confluence.spacebridge.com
           CONFLUENCE_SSL_VERIFY: 'false'
@@ -54,12 +44,6 @@ spec:
             nginx.ingress.kubernetes.io/auth-type: basic
             nginx.ingress.kubernetes.io/auth-secret: mcp-basic-auth
             nginx.ingress.kubernetes.io/auth-realm: "Authentication Required"
-            # 0.21.1 inverted the canonical path vs 0.11.x: the SLASHLESS
-            # /mcp/confluence is served and /mcp/confluence/ 307s back to it
-            # (with an http:// Location, doubly broken). Rewrite everything to
-            # the slashless form — remote MCP clients don't follow 307 POSTs.
-            # NB: opposite of the Jira app, whose 0.11.x image still wants the
-            # trailing slash.
             nginx.ingress.kubernetes.io/rewrite-target: /mcp/confluence$2
           path: /mcp/confluence
           hosts:
@@ -69,17 +53,12 @@ spec:
           - name: vpn-sidecar
             image: docker.io/aw1cks/openconnect
             env:
-              # asa1, NOT asa: the VPN_THROUGHT group exists on both
-              # concentrators but only asa1 (107.161.14.243) passes traffic —
-              # asa (.242) authenticates and then blackholes all TCP.
               - name: URL
                 value: "https://asa1.spacebridge.com"
               - name: AUTH_GROUP
                 value: VPN_THROUGHT
               - name: EXTRA_ARGS
                 value: '--servercert pin-sha256:uUSuxlR7/XsvkUStQFLeE0rJNrPf25XfPNMEbPLFKVs='
-              # The openconnect image wants USER/PASS; the out-of-band secret
-              # stores USERNAME/PASSWORD, so map the keys explicitly.
               - name: USER
                 valueFrom:
                   secretKeyRef:

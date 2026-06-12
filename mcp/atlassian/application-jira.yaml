@@ -3,7 +3,7 @@ kind: Application
 metadata:
   name: mcp-atlassian-jira
   namespace: argo-cd
-  finalizers:  # cascade-delete this app's resources when removed from the app-of-apps; see mcp/README.md
+  finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
   project: mcp
@@ -16,12 +16,10 @@ spec:
         extraArgs:
           - --transport
           - streamable-http
+          - --stateless
         image:
           repository: ghcr.io/arbuzov/mcp-atlassian
-          tag: latest
-        # Non-secret env only. JIRA_USERNAME / JIRA_API_TOKEN come from
-        # the mcp-atlassian-jira-credentials Secret via envSecrets — the
-        # chart has no envFrom value, see README.md.
+          tag: 0.21.1-fork.1
         env:
           JIRA_URL: https://jira.spacebridge.com
           MCP_VERY_VERBOSE: true
@@ -45,10 +43,7 @@ spec:
             nginx.ingress.kubernetes.io/auth-type: basic
             nginx.ingress.kubernetes.io/auth-secret: mcp-basic-auth
             nginx.ingress.kubernetes.io/auth-realm: "Authentication Required"
-            # The MCP server 307-redirects /mcp/jira -> /mcp/jira/ and remote
-            # MCP clients (claude.ai connectors) don't follow POST redirects.
-            # Rewrite to the trailing-slash form so the redirect never happens.
-            nginx.ingress.kubernetes.io/rewrite-target: /mcp/jira/$2
+            nginx.ingress.kubernetes.io/rewrite-target: /mcp/jira$2
           path: /mcp/jira
           hosts:
             - dev.whitediver.keenetic.link
