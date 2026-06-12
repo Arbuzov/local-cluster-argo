@@ -58,12 +58,15 @@ spec:
           - name: vpn-sidecar
             image: docker.io/aw1cks/openconnect
             env:
+              # asa1, NOT asa: the VPN_THROUGHT group exists on both
+              # concentrators but only asa1 (107.161.14.243) passes traffic —
+              # asa (.242) authenticates and then blackholes all TCP.
               - name: URL
-                value: "https://asa.spacebridge.com"
+                value: "https://asa1.spacebridge.com"
               - name: AUTH_GROUP
                 value: VPN_THROUGHT
               - name: EXTRA_ARGS
-                value: '--servercert pin-sha256:2xCM3h9AhLPa83cT8SToVrRPm2Ui84bHlW4VaPrE91s='
+                value: '--servercert pin-sha256:uUSuxlR7/XsvkUStQFLeE0rJNrPf25XfPNMEbPLFKVs='
               # The openconnect image wants USER/PASS; the out-of-band secret
               # stores USERNAME/PASSWORD, so map the keys explicitly.
               - name: USER
