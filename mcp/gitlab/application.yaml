@@ -13,19 +13,36 @@ spec:
     chart: mcp-gitlab
     helm:
       values: |
-        # Pin the image above the chart appVersion (2.0.7). 2.0.19 is the
-        # newest tag published to Docker Hub; the GitHub repo's 2.1.x is NOT
-        # pushed there and anyway rejects static-PAT + STREAMABLE_HTTP in
-        # favour of OAuth/REMOTE_AUTHORIZATION, which would break this setup.
-        # The app.kubernetes.io/version label still reads 2.0.7 (it tracks
-        # Chart.AppVersion, not image.tag) — only the running image changes.
+        # Maintained image is zereight050/gitlab-mcp (iwakitakuma is frozen at
+        # 2.0.19). On 2.1.x a static server-side PAT over STREAMABLE_HTTP is
+        # rejected, so we run REMOTE_AUTHORIZATION (GitLab token per request via a
+        # `Private-Token` header). A `token-injector` nginx sidecar (see sidecars
+        # below) adds that header — reading the PAT from the mcp-gitlab-credentials
+        # Secret — and proxies to the app, so every client and route works with no
+        # change and the PAT never enters git. OAUTH_STATELESS_MODE then seals the
+        # session into the Mcp-Session-Id with the stable OAUTH_STATELESS_SECRET, so
+        # sealed sessions survive pod restarts — no client reconnect.
+        # (app.kubernetes.io/version still reads 2.0.7: it tracks Chart.AppVersion,
+        # not image.tag.)
         image:
-          tag: "2.0.19"
-        # Non-secret env only. GITLAB_PERSONAL_ACCESS_TOKEN comes from the
-        # mcp-gitlab-credentials Secret via envSecrets, see README.md.
+          repository: zereight050/gitlab-mcp
+          tag: "2.1.20"
         env:
           GITLAB_API_URL: https://gitlab.corp.example/api/v4
           STREAMABLE_HTTP: 'true'
+          # 2.1.x rejects a static server-side PAT over STREAMABLE_HTTP; the token
+          # must arrive per-request. The ingress injects `Private-Token: <pat>`.
+          REMOTE_AUTHORIZATION: 'true'
+          # Seal session state into the Mcp-Session-Id so it survives pod restarts
+          # (and is multi-pod safe). Key comes from the mcp-gitlab-stateless Secret.
+          OAUTH_STATELESS_MODE: 'true'
+          # 2.1.x defaults HOST to 127.0.0.1 (since 2.0.21); bind 0.0.0.0 so the
+          # token-injector sidecar (and probes) can reach the app.
+          HOST: '0.0.0.0'
+          # App listens on 3003; the token-injector sidecar owns the chart's
+          # service port (3002, the named "http" port the Service/probe target)
+          # and proxies here after adding the Private-Token header.
+          PORT: '3003'
           GITLAB_READ_ONLY_MODE: 'false'
           USE_GITLAB_WIKI: 'false'
           USE_MILESTONE: 'false'
@@ -34,10 +51,15 @@ spec:
           # does not trust; "0" is the only value Node honors to disable
           # verification (the previous "true" silently did nothing).
           NODE_TLS_REJECT_UNAUTHORIZED: '0'
+        # The app container gets no GITLAB_PERSONAL_ACCESS_TOKEN: REMOTE_AUTHORIZATION
+        # reads the token from the Private-Token header that the token-injector
+        # sidecar adds (it pulls the PAT from mcp-gitlab-credentials). So the app's
+        # only secret is the stateless sealing key. mcp-gitlab-credentials is kept
+        # for the injector and for rollback to the 2.0.x static-PAT model.
         envSecrets:
-          GITLAB_PERSONAL_ACCESS_TOKEN:
-            secretName: mcp-gitlab-credentials
-            secretKey: GITLAB_PERSONAL_ACCESS_TOKEN
+          OAUTH_STATELESS_SECRET:
+            secretName: mcp-gitlab-stateless
+            secretKey: OAUTH_STATELESS_SECRET
         # gitlab.corp.example only exists in corp DNS, which the cluster (and
         # the VPN sidecar's resolver) cannot reach — pin the address so the
         # app container resolves it. gitlab.corp.example = corp-host.example.
@@ -92,6 +114,26 @@ spec:
               capabilities:
                 add:
                   - NET_ADMIN
+          # Token-injector: owns the chart's service port (3002 = the named "http"
+          # port the Service and probes target) and reverse-proxies to the MCP app
+          # on 127.0.0.1:3003, adding `Private-Token` from the mcp-gitlab-credentials
+          # Secret. This satisfies 2.1.x REMOTE_AUTHORIZATION transparently for every
+          # client/route (injection happens below the Service, so no ingress change)
+          # and keeps the PAT out of git. proxy_buffering off + HTTP/1.1 preserve the
+          # streamable-HTTP/SSE responses. No named port so "http" stays unique.
+          - name: token-injector
+            image: nginx:1.27-alpine
+            command: ["/bin/sh", "-c"]
+            args:
+              - |
+                printf 'server { listen 3002; location / { proxy_set_header Private-Token "%s"; proxy_pass http://127.0.0.1:3003; proxy_http_version 1.1; proxy_set_header Connection ""; proxy_buffering off; proxy_read_timeout 3600s; } }\n' "$GITLAB_PAT" > /etc/nginx/conf.d/default.conf
+                exec nginx -g 'daemon off;'
+            env:
+              - name: GITLAB_PAT
+                valueFrom:
+                  secretKeyRef:
+                    name: mcp-gitlab-credentials
+                    key: GITLAB_PERSONAL_ACCESS_TOKEN
   destination:
     server: https://kubernetes.default.svc
     namespace: mcp
