@@ -3,7 +3,7 @@ kind: Application
 metadata:
   name: mcp-gitlab
   namespace: argo-cd
-  finalizers:  # cascade-delete this app's resources when removed from the app-of-apps; see mcp/README.md
+  finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
   project: mcp
@@ -13,56 +13,25 @@ spec:
     chart: mcp-gitlab
     helm:
       values: |
-        # Maintained image is zereight050/gitlab-mcp (iwakitakuma is frozen at
-        # 2.0.19). On 2.1.x a static server-side PAT over STREAMABLE_HTTP is
-        # rejected, so we run REMOTE_AUTHORIZATION (GitLab token per request via a
-        # `Private-Token` header). A `token-injector` nginx sidecar (see sidecars
-        # below) adds that header — reading the PAT from the mcp-gitlab-credentials
-        # Secret — and proxies to the app, so every client and route works with no
-        # change and the PAT never enters git. OAUTH_STATELESS_MODE then seals the
-        # session into the Mcp-Session-Id with the stable OAUTH_STATELESS_SECRET, so
-        # sealed sessions survive pod restarts — no client reconnect.
-        # (app.kubernetes.io/version still reads 2.0.7: it tracks Chart.AppVersion,
-        # not image.tag.)
         image:
           repository: zereight050/gitlab-mcp
           tag: "2.1.20"
         env:
           GITLAB_API_URL: https://gitlab.asatnet.net/api/v4
           STREAMABLE_HTTP: 'true'
-          # 2.1.x rejects a static server-side PAT over STREAMABLE_HTTP; the token
-          # must arrive per-request. The ingress injects `Private-Token: <pat>`.
           REMOTE_AUTHORIZATION: 'true'
-          # Seal session state into the Mcp-Session-Id so it survives pod restarts
-          # (and is multi-pod safe). Key comes from the mcp-gitlab-stateless Secret.
           OAUTH_STATELESS_MODE: 'true'
-          # 2.1.x defaults HOST to 127.0.0.1 (since 2.0.21); bind 0.0.0.0 so the
-          # token-injector sidecar (and probes) can reach the app.
           HOST: '0.0.0.0'
-          # App listens on 3003; the token-injector sidecar owns the chart's
-          # service port (3002, the named "http" port the Service/probe target)
-          # and proxies here after adding the Private-Token header.
           PORT: '3003'
           GITLAB_READ_ONLY_MODE: 'false'
           USE_GITLAB_WIKI: 'false'
           USE_MILESTONE: 'false'
           USE_PIPELINE: 'false'
-          # GitLab presents a private-CA cert (Headless Root CA) the image
-          # does not trust; "0" is the only value Node honors to disable
-          # verification (the previous "true" silently did nothing).
           NODE_TLS_REJECT_UNAUTHORIZED: '0'
-        # The app container gets no GITLAB_PERSONAL_ACCESS_TOKEN: REMOTE_AUTHORIZATION
-        # reads the token from the Private-Token header that the token-injector
-        # sidecar adds (it pulls the PAT from mcp-gitlab-credentials). So the app's
-        # only secret is the stateless sealing key. mcp-gitlab-credentials is kept
-        # for the injector and for rollback to the 2.0.x static-PAT model.
         envSecrets:
           OAUTH_STATELESS_SECRET:
             secretName: mcp-gitlab-stateless
             secretKey: OAUTH_STATELESS_SECRET
-        # gitlab.asatnet.net only exists in corp DNS, which the cluster (and
-        # the VPN sidecar's resolver) cannot reach — pin the address so the
-        # app container resolves it. gitlab.asatnet.net = zeus-1.asatnet.net.
         hostAliases:
           - ip: 192.168.8.156
             hostnames:
@@ -74,31 +43,21 @@ spec:
             nginx.ingress.kubernetes.io/auth-type: basic
             nginx.ingress.kubernetes.io/auth-secret: mcp-basic-auth
             nginx.ingress.kubernetes.io/auth-realm: "Authentication Required"
-            # gitlab-mcp ignores --path-prefix and always serves /mcp, so
-            # rewrite /mcp/gitlab/... onto it (same shape as the jira and
-            # confluence apps; remote MCP clients don't follow 307s either).
             nginx.ingress.kubernetes.io/rewrite-target: /mcp$2
           path: /mcp/gitlab
           hosts:
             - dev.whitediver.keenetic.link
             - "*"
-        # Same OpenConnect sidecar as the confluence app — GitLab lives
-        # behind the corp VPN. Reuses the shared VPN credentials Secret.
         sidecars:
           - name: vpn-sidecar
             image: docker.io/aw1cks/openconnect
             env:
-              # asa1, NOT asa: the VPN_THROUGHT group exists on both
-              # concentrators but only asa1 (107.161.14.243) passes traffic —
-              # asa (.242) authenticates and then blackholes all TCP.
               - name: URL
                 value: "https://asa1.spacebridge.com"
               - name: AUTH_GROUP
                 value: VPN_THROUGHT
               - name: EXTRA_ARGS
                 value: '--servercert pin-sha256:uUSuxlR7/XsvkUStQFLeE0rJNrPf25XfPNMEbPLFKVs='
-              # The openconnect image wants USER/PASS; the out-of-band secret
-              # stores USERNAME/PASSWORD, so map the keys explicitly.
               - name: USER
                 valueFrom:
                   secretKeyRef:
@@ -114,13 +73,6 @@ spec:
               capabilities:
                 add:
                   - NET_ADMIN
-          # Token-injector: owns the chart's service port (3002 = the named "http"
-          # port the Service and probes target) and reverse-proxies to the MCP app
-          # on 127.0.0.1:3003, adding `Private-Token` from the mcp-gitlab-credentials
-          # Secret. This satisfies 2.1.x REMOTE_AUTHORIZATION transparently for every
-          # client/route (injection happens below the Service, so no ingress change)
-          # and keeps the PAT out of git. proxy_buffering off + HTTP/1.1 preserve the
-          # streamable-HTTP/SSE responses. No named port so "http" stays unique.
           - name: token-injector
             image: nginx:1.27-alpine
             command: ["/bin/sh", "-c"]
