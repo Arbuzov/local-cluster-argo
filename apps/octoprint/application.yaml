@@ -14,6 +14,11 @@ spec:
       values: |
         image:
           tag: latest
+        # Printer is a CP210x USB-serial board on kube-master, exposed as /dev/ttyUSB0.
+        # The chart bind-mounts this host device onto the container's (hardcoded) /dev/ttyACM0.
+        # Default was /dev/ttyACM0, which does not exist on the host -> kubelet created an empty
+        # directory there and OctoPrint failed with "Port /dev/ttyACM0 is busy or does not exist".
+        device: /dev/ttyUSB0
         ingress:
           enabled: true
           annotations:
