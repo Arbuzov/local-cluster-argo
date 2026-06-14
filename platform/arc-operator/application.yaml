@@ -1,0 +1,30 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: arc-operator
+  namespace: argo-cd
+spec:
+  project: platform
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: arc-system
+  source:
+    repoURL: https://actions-runner-controller.github.io/actions-runner-controller
+    chart: actions-runner-controller
+    targetRevision: 0.23.7
+    helm:
+      skipCrds: true
+      values: |
+        # The chart's own authSecret.create=true expects a github_token
+        # inlined here. We disable that path and rely on a Secret we create
+        # out-of-band (see README.md) so the PAT never lands in git.
+        authSecret:
+          create: false
+          name: controller-manager
+  syncPolicy:
+    automated:
+      prune: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - ServerSideDiff=true

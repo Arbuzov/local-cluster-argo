@@ -1,0 +1,217 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argo-cd
+  namespace: argo-cd
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  ignoreDifferences:
+  - group: apiextensions.k8s.io
+    kind: CustomResourceDefinition
+    jsonPointers:
+    - /status
+  destination:
+    namespace: argo-cd
+    server: https://kubernetes.default.svc
+  project: platform
+  source:
+    chart: argo-cd
+    helm:
+      values: |
+        controller:
+          replicaCount: 1
+          resources:
+            limits:
+              cpu: 100m
+              memory: 1Gi
+            requests:
+              cpu: 100m
+              memory: 512Mi
+        dex:
+          resources:
+            limits:
+              cpu: 100m
+              memory: 256Mi
+            requests:
+              cpu: 100m
+              memory: 256Mi
+        global:
+          security:
+            allowInsecureImages: true
+        configs:
+          secret:
+            createSecret: false
+          params:
+            server.disable.auth: false
+            server.dex.server: https://argo-cd-argocd-dex-server:5556
+            server.dex.server.strict.tls: false
+          rbac:
+            policy.csv: |
+              p, role:dev-readwrite, applications, get, */*, allow
+              p, role:dev-readwrite, applications, sync, dev/*, allow
+              p, role:dev-readwrite, projects, get, dev, allow
+              g, info@whitediver.com, role:admin
+              p, role:homepage, applications, get, */*, allow
+              g, homepage, role:homepage
+            scopes: '[email, groups]'
+            policy.default: role:readonly
+          cm:
+            accounts.homepage: apiKey
+            admin.enabled: "false"
+            url: https://dev.whitediver.keenetic.link/argo-cd
+            resource.customizations.health.apiextensions.k8s.io_CustomResourceDefinition: |
+              hs = {}
+              hs.status = "Healthy"
+              hs.message = "CRD health check skipped"
+              return hs
+            resource.customizations.health.Service: |
+              hs = {}
+              if obj.spec.type == "LoadBalancer" then
+                if obj.status ~= nil and obj.status.loadBalancer ~= nil and obj.status.loadBalancer.ingress ~= nil then
+                  hs.status = "Healthy"
+                  return hs
+                end
+                if obj.spec.externalIPs ~= nil and #obj.spec.externalIPs > 0 then
+                  hs.status = "Healthy"
+                  hs.message = "LoadBalancer served via externalIPs"
+                  return hs
+                end
+                hs.status = "Progressing"
+                hs.message = "Waiting for LoadBalancer ingress"
+                return hs
+              end
+              hs.status = "Healthy"
+              return hs
+            resource.exclusions: |
+              - apiGroups:
+                - apiextensions.k8s.io
+                kinds:
+                - CustomResourceDefinition
+                clusters:
+                - '*'
+              - apiGroups:
+                - ''
+                - discovery.k8s.io
+                kinds:
+                - Endpoints
+                - EndpointSlice
+              - apiGroups:
+                - coordination.k8s.io
+                kinds:
+                - Lease
+              - apiGroups:
+                - authentication.k8s.io
+                - authorization.k8s.io
+                kinds:
+                - SelfSubjectReview
+                - TokenReview
+                - LocalSubjectAccessReview
+                - SelfSubjectAccessReview
+                - SelfSubjectRulesReview
+                - SubjectAccessReview
+              - apiGroups:
+                - certificates.k8s.io
+                kinds:
+                - CertificateSigningRequest
+              - apiGroups:
+                - cert-manager.io
+                kinds:
+                - CertificateRequest
+              - apiGroups:
+                - cilium.io
+                kinds:
+                - CiliumIdentity
+                - CiliumEndpoint
+                - CiliumEndpointSlice
+              - apiGroups:
+                - kyverno.io
+                - reports.kyverno.io
+                - wgpolicyk8s.io
+                kinds:
+                - PolicyReport
+                - ClusterPolicyReport
+                - EphemeralReport
+                - ClusterEphemeralReport
+                - AdmissionReport
+                - ClusterAdmissionReport
+                - BackgroundScanReport
+                - ClusterBackgroundScanReport
+                - UpdateRequest
+            dex.config: |
+                connectors:
+                - config:
+                    issuer: https://accounts.google.com
+                    redirectURI: https://dev.whitediver.keenetic.link/argo-cd/api/dex/callback
+                    clientID: $dex.google.clientID
+                    clientSecret: $dex.google.clientSecret
+                    adminEmail: info@whitediver.com
+                  type: oidc
+                  id: google
+                  name: Google
+        server:
+          autoscaling:
+            enabled: false
+          url: https://dev.whitediver.keenetic.link/argo-cd
+          extraArgs:
+            - --insecure
+            - --rootpath=/argo-cd
+            - --basehref=/argo-cd
+          resources:
+            limits:
+              cpu: 100m
+              memory: 256Mi
+            requests:
+              cpu: 100m
+              memory: 256Mi
+          ingress:
+            enabled: true
+            path: /argo-cd
+            hostname: 'dev.whitediver.keenetic.link'
+            ingressClassName: nginx
+            tls: true
+            selfSigned: true
+            extraHosts:
+              - name: ''
+                path: /argo-cd
+        redis:
+          enabled: true
+          image:
+            repository: redis
+            tag: 7.2-alpine
+          resources:
+            limits:
+              cpu: 100m
+              memory: 128Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+        redisSecretInit:
+          enabled: false
+        repoServer:
+          autoscaling:
+            enabled: false
+          replicaCount: 1
+          resources:
+            limits:
+              cpu: 300m
+              memory: 512Mi
+            requests:
+              cpu: 150m
+              memory: 256Mi
+          livenessProbe:
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+          readinessProbe:
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 10
+    repoURL: https://argoproj.github.io/argo-helm
+    targetRevision: 9.5.21
+  syncPolicy:
+    automated:
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - RespectIgnoreDifferences=true

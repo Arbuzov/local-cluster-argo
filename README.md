@@ -34,27 +34,32 @@ Each service is a directory with:
 
 Two delivery models live side by side:
 
-### `mcp/` — pull-based GitOps (app-of-apps)
+### App-of-apps groups — pull-based GitOps
 
-The `mcp` app-of-apps ([`mcp/root.yaml`](mcp/root.yaml)) points Argo CD at
-this repo on GitHub over HTTPS and reconciles the [`mcp`
-AppProject](mcp/project.yaml) plus every MCP `Application` automatically.
-Bootstrap it once, after the repo is pushed to GitHub:
+`apps/`, `mcp/` and `platform/` each ship a `root.yaml` app-of-apps that
+points Argo CD at this repo on GitHub over HTTPS and reconciles that group's
+`AppProject` (`<group>/project.yaml`) plus every enabled child `Application`
+automatically. Bootstrap each once, after the repo is pushed to GitHub:
 
 ```sh
+kubectl apply -f apps/root.yaml
 kubectl apply -f mcp/root.yaml
+kubectl apply -f platform/root.yaml
 ```
 
-From then on Argo CD watches `main`: edit an `mcp/<service>/application.yaml`,
-commit and push, and it syncs on its own (the app-of-apps runs `automated`
-sync with `prune` + `selfHeal`). The `mcp` children belong to the `mcp`
-AppProject; the app-of-apps itself stays in `default` so it can create that
-project.
+From then on Argo CD watches `main`: edit a `<group>/<service>/application.yaml`,
+commit and push, and it syncs on its own (each app-of-apps runs `automated`
+sync with `prune` + `selfHeal`). The children belong to their group's
+AppProject (`project: apps` / `mcp` / `platform`); the app-of-apps itself stays
+in `default` so it can create that project. Each group's `README.md` documents
+which children are enabled vs. held back via the `root.yaml` `exclude` glob
+(`platform/` currently deploys only `argo-cd` + `arc-operator`).
 
 ### Everything else — push-based
 
-The other groups are **not** watched by Argo CD. To deliver a change, apply
-the Application directly:
+The remaining groups, and any app-of-apps child held back by an `exclude`
+glob, are **not** watched by Argo CD. To deliver a change, apply the
+Application directly:
 
 ```sh
 kubectl apply -f <group>/<service>/application.yaml
@@ -145,10 +150,15 @@ When standing up a fresh cluster:
    in `local-cluster-helm/arbuzov/platform/argo-cd/values.yaml`).
 2. Create `argocd-secret` in the `argo-cd` namespace
    (see `platform/argo-cd/README.md`).
-3. `kubectl apply -f platform/argo-cd/application.yaml` to hand
-   ownership of the install over to Argo CD.
+3. `kubectl apply -f platform/root.yaml` to bring up the `platform`
+   app-of-apps, which hands ownership of the Argo CD install over to Argo CD
+   (the self-managing `argo-cd` child) and deploys `arc-operator`. Create
+   `arc-operator`'s `controller-manager` Secret first (see
+   `platform/arc-operator/README.md`).
 4. Bring up `storage/smb` next — most other workloads mount its shares.
-5. Then `platform/metrics-server`, `platform/kubernetes-dashboard`.
+5. Then `platform/metrics-server`, `platform/kubernetes-dashboard` — still
+   push-based for now (held back by the `platform` app-of-apps `exclude`
+   glob), so apply each directly.
 6. Apply the rest as needed; create each app's Secrets (per its
    `README.md`) before applying its Application.
 
