@@ -8,11 +8,12 @@ the corp subnet through it instead of each running their own OpenConnect sidecar
 > concentrator routes only **one** session per user — two live tunnels →
 > **both blackholed**. One shared session removes the conflict.
 
-Like the other `networking/` apps, the chart lives in a separate git repo —
-[`Arbuzov/home-cluster-helm`](https://github.com/Arbuzov/home-cluster-helm),
-path `arbuzov/networking/openconnect-gateway` (that repo also backs
-`wg-vless-gateway`). Edits to the *chart* require a push there before Argo CD
-picks them up; edits to this *Application* take effect once it's applied.
+The chart is embedded **in this repo** under [`chart/`](chart/), and the
+Application points there. Unlike the other `networking/` apps (which reference
+the **private** `home-cluster-helm`), this keeps it on a public source so Argo CD
+needs no repository credentials — every other Application in this cluster also
+pulls from public sources. Edit the chart under `chart/` and push; Argo CD picks
+it up on the next sync.
 
 ## Deploy (push-based, like the rest of `networking/`)
 

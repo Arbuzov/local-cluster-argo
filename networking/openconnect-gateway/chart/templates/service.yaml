@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "openconnect-gateway.fullname" . }}
+  labels:
+    {{- include "openconnect-gateway.labels" . | nindent 4 }}
+spec:
+  # Headless: the A record returns the gateway pod IP, which client route-manager
+  # sidecars use as the next-hop for the corp subnets. publishNotReadyAddresses
+  # keeps the IP resolvable during gateway startup/reconnect.
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    {{- include "openconnect-gateway.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: vpn
+      port: {{ .Values.service.port }}
+      targetPort: {{ .Values.service.port }}
+      protocol: TCP

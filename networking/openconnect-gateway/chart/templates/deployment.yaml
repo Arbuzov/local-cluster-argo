@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "openconnect-gateway.fullname" . }}
+  labels:
+    {{- include "openconnect-gateway.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  # One session per corp user — never run two. Recreate avoids a second tunnel
+  # transiently overlapping the old one (which the concentrator blackholes).
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "openconnect-gateway.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "openconnect-gateway.selectorLabels" . | nindent 8 }}
+    spec:
+      initContainers:
+        # Forwarding knobs for acting as a NAT gateway. ip_forward is usually
+        # already 1, but make it explicit; rp_filter=0 avoids dropping the
+        # asymmetric (eth0 in / tun127 out) forwarded path; FORWARD ACCEPT in
+        # case the netns default is restrictive. /proc writes avoid depending on
+        # a sysctl binary. These persist in the shared pod netns.
+        - name: init-forwarding
+          image: {{ include "openconnect-gateway.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo 1 > /proc/sys/net/ipv4/ip_forward
+              echo 0 > /proc/sys/net/ipv4/conf/all/rp_filter
+              echo 0 > /proc/sys/net/ipv4/conf/default/rp_filter
+              iptables -P FORWARD ACCEPT
+          securityContext:
+            privileged: true
+            capabilities:
+              add:
+                - NET_ADMIN
+      containers:
+        # OpenConnect via the image's own entrypoint: it dials the tunnel
+        # (tun127), and once up adds `-A POSTROUTING -o tun127 -j MASQUERADE`,
+        # which SNATs forwarded client traffic onto the VPN-assigned address so
+        # the corp side has a return path. The liveness probe restarts the
+        # container if the tunnel drops (entrypoint runs openconnect with
+        # --background, so the process can die while the container lingers).
+        - name: openconnect
+          image: {{ include "openconnect-gateway.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: URL
+              value: {{ .Values.vpn.url | quote }}
+            - name: AUTH_GROUP
+              value: {{ .Values.vpn.authGroup | quote }}
+            - name: EXTRA_ARGS
+              value: {{ .Values.vpn.extraArgs | quote }}
+            - name: USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.vpn.secretName }}
+                  key: {{ .Values.vpn.usernameKey }}
+            - name: PASS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.vpn.secretName }}
+                  key: {{ .Values.vpn.passwordKey }}
+          securityContext:
+            privileged: true
+            capabilities:
+              add:
+                - NET_ADMIN
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - ip addr show tun127 | grep -q "inet "
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

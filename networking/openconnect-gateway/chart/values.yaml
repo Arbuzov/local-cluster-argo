@@ -1,0 +1,58 @@
+# Single shared OpenConnect VPN gateway.
+#
+# One pod = ONE OpenConnect session to the corp concentrator. Selected client
+# pods (gitlab / confluence MCP) route the corp subnet(s) through this pod via a
+# small route-manager sidecar; this pod forwards + MASQUERADEs onto its tun127.
+# This replaces the per-pod OpenConnect sidecars, which all logged in as the
+# same user and the concentrator only routes ONE session per user (two live
+# tunnels => both blackholed).
+
+replicaCount: 1
+
+image:
+  repository: docker.io/aw1cks/openconnect
+  # The former per-pod sidecars ran this image untagged (=> latest). Keep latest
+  # but IfNotPresent so the gateway uses the copy already cached on the node.
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+# Corp VPN connection — identical to the former per-pod sidecars.
+vpn:
+  url: "https://vpn.corp.example"
+  authGroup: "VPN_GROUP_A"
+  # Public fingerprint of the concentrator cert (anti-MITM) — not a secret.
+  extraArgs: "--servercert pin-sha256:REDACTED"
+  # Out-of-band Secret holding USERNAME/PASSWORD (mapped to the USER/PASS env
+  # the image expects). Reused from the mcp namespace.
+  secretName: "mcp-atlassian-vpn-credentials"
+  usernameKey: "USERNAME"
+  passwordKey: "PASSWORD"
+
+# Corp subnets this gateway fronts. Informational only — the actual route is
+# installed by the route-manager sidecar in each client pod. Documented here so
+# the gateway's purpose is self-describing and easy to extend.
+routedCidrs:
+  - 10.20.0.0/24
+
+# Pin to a node whose kernel has the iptable_nat module. The RPi workers
+# (kube-worker-3) FAIL with "can't initialize iptables table 'nat'"; kube-master
+# works. MASQUERADE for forwarded traffic requires nat, so the gateway must land
+# here.
+nodeSelector:
+  kubernetes.io/hostname: kube-master
+
+tolerations: []
+affinity: {}
+
+resources:
+  limits:
+    cpu: 300m
+    memory: 128Mi
+  requests:
+    cpu: 50m
+    memory: 64Mi
+
+service:
+  # Headless: clients resolve the gateway pod IP via DNS and route corp subnets
+  # to it. The port is nominal (only the A record matters).
+  port: 443
