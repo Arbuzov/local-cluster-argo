@@ -34,16 +34,16 @@ vpn:
 routedCidrs:
   - 10.20.0.0/24
 
-# Schedule onto any node whose kernel can init the iptable_nat table (MASQUERADE
-# for forwarded client traffic needs it) — not a hard-coded host. Label capable
-# nodes out-of-band:
+# Placement is operator-controlled via a node label, not a hard-coded host. Label
+# the nodes you want to host the gateway:
 #   kubectl label node <node> vpn-gateway-capable=true
-# Verified capable: kube-master, kube-worker-1, kube-worker-2 (kernel 6.1.21-v8+).
-# kube-worker-3 (6.18 rpt-rpi kernel) FAILS with "can't initialize iptables table
-# 'nat'" and is intentionally left unlabeled. Client MCP pods (gitlab/confluence)
-# follow this pod onto whichever capable node it lands on via podAffinity — their
-# route-manager sidecar needs the gateway pod IP to be an on-link next-hop, i.e.
-# on the same node.
+# Because the deployment now drives iptables through the nftables backend (see the
+# relink in templates/deployment.yaml), MASQUERADE works on every node's kernel —
+# including kube-worker-3 (6.18 rpt-rpi, nft-only, no legacy iptable_nat module).
+# So all four nodes qualify; the label just lets you pin/exclude nodes by hand.
+# Client MCP pods (gitlab/confluence) follow this pod onto whichever labelled node
+# it lands on via podAffinity — their route-manager sidecar needs the gateway pod
+# IP to be an on-link next-hop, i.e. on the same node.
 nodeSelector:
   vpn-gateway-capable: "true"
 

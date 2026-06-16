@@ -31,6 +31,13 @@ spec:
             - /bin/sh
             - -c
             - |
+              # Point iptables at the nftables backend. The image ships
+              # /sbin/iptables -> xtables-legacy-multi, but newer kernels (e.g. the
+              # 6.18 rpt-rpi kernel on kube-worker-3) build NO legacy xtables modules
+              # (iptable_nat/iptable_filter) — Debian/RPi trixie is nft-only, so a
+              # legacy call dies with "can't initialize iptables table". nft works on
+              # every node's kernel, making the gateway node-agnostic.
+              ln -sf /sbin/xtables-nft-multi /sbin/iptables
               echo 1 > /proc/sys/net/ipv4/ip_forward
               echo 0 > /proc/sys/net/ipv4/conf/all/rp_filter
               echo 0 > /proc/sys/net/ipv4/conf/default/rp_filter
@@ -50,6 +57,15 @@ spec:
         - name: openconnect
           image: {{ include "openconnect-gateway.image" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # Apply the same nft relink as the init container (separate container
+          # rootfs ⇒ must redo it), then hand off to the image's own env-driven
+          # entrypoint. The entrypoint adds the MASQUERADE rule via `iptables`,
+          # which is now nft-backed, so it succeeds on nft-only kernels too.
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              ln -sf /sbin/xtables-nft-multi /sbin/iptables
+              exec /vpn/entrypoint.sh
           env:
             - name: URL
               value: {{ .Values.vpn.url | quote }}
