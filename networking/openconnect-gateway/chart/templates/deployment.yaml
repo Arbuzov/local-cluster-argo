@@ -6,8 +6,6 @@ metadata:
     {{- include "openconnect-gateway.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
-  # One session per corp user — never run two. Recreate avoids a second tunnel
-  # transiently overlapping the old one (which the concentrator blackholes).
   strategy:
     type: Recreate
   selector:
@@ -19,11 +17,6 @@ spec:
         {{- include "openconnect-gateway.selectorLabels" . | nindent 8 }}
     spec:
       initContainers:
-        # Forwarding knobs for acting as a NAT gateway. ip_forward is usually
-        # already 1, but make it explicit; rp_filter=0 avoids dropping the
-        # asymmetric (eth0 in / tun127 out) forwarded path; FORWARD ACCEPT in
-        # case the netns default is restrictive. /proc writes avoid depending on
-        # a sysctl binary. These persist in the shared pod netns.
         - name: init-forwarding
           image: {{ include "openconnect-gateway.image" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
@@ -31,12 +24,6 @@ spec:
             - /bin/sh
             - -c
             - |
-              # Point iptables at the nftables backend. The image ships
-              # /sbin/iptables -> xtables-legacy-multi, but newer kernels (e.g. the
-              # 6.18 rpt-rpi kernel on kube-worker-3) build NO legacy xtables modules
-              # (iptable_nat/iptable_filter) — Debian/RPi trixie is nft-only, so a
-              # legacy call dies with "can't initialize iptables table". nft works on
-              # every node's kernel, making the gateway node-agnostic.
               ln -sf /sbin/xtables-nft-multi /sbin/iptables
               echo 1 > /proc/sys/net/ipv4/ip_forward
               echo 0 > /proc/sys/net/ipv4/conf/all/rp_filter
@@ -48,19 +35,9 @@ spec:
               add:
                 - NET_ADMIN
       containers:
-        # OpenConnect via the image's own entrypoint: it dials the tunnel
-        # (tun127), and once up adds `-A POSTROUTING -o tun127 -j MASQUERADE`,
-        # which SNATs forwarded client traffic onto the VPN-assigned address so
-        # the corp side has a return path. The liveness probe restarts the
-        # container if the tunnel drops (entrypoint runs openconnect with
-        # --background, so the process can die while the container lingers).
         - name: openconnect
           image: {{ include "openconnect-gateway.image" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          # Apply the same nft relink as the init container (separate container
-          # rootfs ⇒ must redo it), then hand off to the image's own env-driven
-          # entrypoint. The entrypoint adds the MASQUERADE rule via `iptables`,
-          # which is now nft-backed, so it succeeds on nft-only kernels too.
           command: ["/bin/sh", "-c"]
           args:
             - |

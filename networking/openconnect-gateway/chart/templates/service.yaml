@@ -5,9 +5,6 @@ metadata:
   labels:
     {{- include "openconnect-gateway.labels" . | nindent 4 }}
 spec:
-  # Headless: the A record returns the gateway pod IP, which client route-manager
-  # sidecars use as the next-hop for the corp subnets. publishNotReadyAddresses
-  # keeps the IP resolvable during gateway startup/reconnect.
   clusterIP: None
   publishNotReadyAddresses: true
   selector:
