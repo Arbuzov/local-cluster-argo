@@ -2,22 +2,15 @@ apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: openconnect-gateway
-  # This cluster's Argo CD watches the `argo-cd` namespace (where the mcp and
-  # platform Applications live). The older networking apps say `argocd`, but that
-  # namespace does not exist here.
   namespace: argo-cd
 spec:
   project: default
   source:
-    # Chart lives in THIS repo (public) so Argo needs no credentials — unlike
-    # home-cluster-helm (private). Argo auto-detects Helm from chart/Chart.yaml.
     repoURL: https://github.com/Arbuzov/local-cluster-argo.git
     targetRevision: main
     path: networking/openconnect-gateway/chart
   destination:
     server: https://kubernetes.default.svc
-    # Deploys into mcp so it can reuse the mcp-atlassian-vpn-credentials Secret
-    # and share the namespace (pod-IP routing + Service DNS) with its clients.
     namespace: mcp
   syncPolicy:
     automated:

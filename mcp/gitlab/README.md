@@ -2,7 +2,7 @@
 
 GitLab MCP server ([zereight050/gitlab-mcp](https://hub.docker.com/r/zereight050/gitlab-mcp),
 v2.1.20) at `/mcp/gitlab` on `dev.whitediver.keenetic.link`, talking to the corp
-GitLab at `gitlab.corp.example` over the VPN sidecar.
+GitLab at `gitlab.corp.example` over the shared openconnect-gateway VPN.
 
 > **Not** the same as `gitlab-sandbox.corp.example` (10.20.67.56) — that is a
 > separate gitlab-mcp instance in the corp sandbox, unrelated to this deployment.
@@ -40,11 +40,22 @@ The app container holds no GitLab token; `mcp-gitlab-credentials` is read only b
 injector. To roll back to the 2.0.x static-PAT model, `git revert` the bump — Argo
 returns to `iwakitakuma/gitlab-mcp:2.0.19` (both Secrets are left intact).
 
-## VPN sidecar + hostAliases
+## Corp routing (shared VPN gateway) + hostAliases
 
-GitLab lives behind the corp VPN, so the pod runs the same OpenConnect
-sidecar as the confluence app (`mcp/atlassian/application-confluence.yaml`),
-reusing the shared `mcp-atlassian-vpn-credentials` Secret.
+GitLab lives behind the corp VPN. Like the confluence app, this pod does **not**
+run its own OpenConnect tunnel — it routes `10.20.0.0/24` through the shared
+[`openconnect-gateway`](../../networking/openconnect-gateway/) pod (reusing the
+`mcp-atlassian-vpn-credentials` Secret):
+
+- a **`route-manager`** sidecar keeps `ip route replace 10.20.0.0/24 via
+  <gateway-pod-ip>` pointed at the gateway's headless Service;
+- **`podAffinity`** co-locates this pod with the gateway, because the route's
+  pod-IP next-hop is only on-link when both share a node — off-node it fails with
+  `Network unreachable` and corp traffic never reaches the VPN (previously it
+  worked only because the scheduler happened to co-locate them).
+
+See [`networking/openconnect-gateway/chart/README.md`](../../networking/openconnect-gateway/chart/README.md)
+for the gateway internals.
 
 Unlike `*.corp.example` names, `gitlab.corp.example` exists **only in corp
 DNS** (corp-dns.example, 10.20.30.21), which neither cluster DNS nor

@@ -36,13 +36,6 @@ spec:
           - ip: 10.20.0.156
             hostnames:
               - gitlab.corp.example
-        # Co-locate this pod on the SAME node as the openconnect-gateway pod (which
-        # lands on any node labelled vpn-gateway-capable=true). The route-manager
-        # sidecar routes the corp subnet via the gateway's pod IP, which is only
-        # on-link when this pod shares the gateway's node — off-node the route fails
-        # ("Network unreachable") and corp traffic never reaches the VPN. Previously
-        # this worked only because the scheduler happened to co-locate it; podAffinity
-        # makes following the gateway deterministic without hard-coding a hostname.
         affinity:
           podAffinity:
             requiredDuringSchedulingIgnoredDuringExecution:
@@ -63,15 +56,6 @@ spec:
             - dev.whitediver.keenetic.link
             - "*"
         sidecars:
-          # route-manager: corp traffic (gitlab.corp.example = 10.20.0.156, in
-          # 10.20.0.0/24) now goes through the shared `openconnect-gateway` pod
-          # instead of a per-pod VPN tunnel (per-pod sidecars all logged in as the
-          # same corp user, and the concentrator routes only one session per user
-          # → two tunnels blackholed each other). This sidecar resolves the
-          # gateway's headless Service and keeps `ip route replace 10.20.0.0/24
-          # via <gateway-pod-ip>` in place, so the route self-repairs if the
-          # gateway pod IP changes. gitlab.corp.example stays pinned via hostAliases
-          # above; only the L3 path moves to the gateway.
           - name: route-manager
             image: docker.io/aw1cks/openconnect
             command: ["/bin/sh", "-c"]

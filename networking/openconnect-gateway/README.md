@@ -21,6 +21,10 @@ it up on the next sync.
 kubectl apply -f networking/openconnect-gateway/application.yaml
 ```
 
+The Application lives in the **`argo-cd`** namespace — where this cluster's Argo CD
+watches for Applications (alongside the `mcp`/`platform` apps); the older
+`networking/` apps reference `argocd`, which does not exist here.
+
 Deploys into the **mcp** namespace so it can reuse the existing
 `mcp-atlassian-vpn-credentials` Secret and share the namespace (pod-IP routing +
 Service DNS) with its client pods.
