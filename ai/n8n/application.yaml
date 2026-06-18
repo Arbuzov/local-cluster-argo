@@ -385,6 +385,9 @@ spec:
                   template:
                     spec:
                       restartPolicy: Never
+                      # n8n's own N8N_PORT config clashes with the legacy
+                      # service-link env k8s would inject (Service `n8n`).
+                      enableServiceLinks: false
                       securityContext:
                         runAsUser: 999
                         runAsGroup: 999
