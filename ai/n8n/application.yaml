@@ -16,7 +16,8 @@ spec:
       # Sensitive values (N8N_ENCRYPTION_KEY, Postgres password) are read
       # from the pre-existing Secret `n8n-secrets` in the `n8n` namespace.
       # See README.md for the keys and a sample `kubectl create secret`.
-      valuesObject: {}
+      # NB: do NOT add `valuesObject` here — an empty one wins over `values`
+      # and the chart silently renders defaults (no worker/webhook/db).
       values: |
         image:
           repository: n8nio/n8n
