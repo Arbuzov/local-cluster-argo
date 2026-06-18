@@ -1,0 +1,21 @@
+# Local-only overrides that may carry real credentials.
+# Anything ending in .local.yaml is for unencrypted copies you apply
+# with kubectl directly — never committed.
+*.local.yaml
+*.local.yml
+*.secret.yaml
+*.secret.yml
+
+# SOPS / age / sealed-secrets work files (commit the encrypted versions
+# under a different suffix if/when you adopt one of these).
+*.dec.yaml
+*.dec.yml
+.sops.yaml.bak
+
+# Editor / OS junk
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
