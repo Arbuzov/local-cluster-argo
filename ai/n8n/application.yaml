@@ -1,0 +1,327 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: n8n
+  namespace: argo-cd
+spec:
+  project: ai
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+  source:
+    repoURL: 8gears.container-registry.com/library
+    targetRevision: 2.0.1
+    helm:
+      # Sensitive values (N8N_ENCRYPTION_KEY, Postgres password) are read
+      # from the pre-existing Secret `n8n-secrets` in the `n8n` namespace.
+      # See README.md for the keys and a sample `kubectl create secret`.
+      valuesObject: {}
+      values: |
+        image:
+          repository: n8nio/n8n
+          tag: 2.18.4
+        db:
+          type: postgresdb
+          logging:
+            enabled: true
+            options: error
+            maxQueryExecutionTime: 1000
+        worker:
+          enabled: true
+          resources:
+            requests:
+              memory: "384Mi"
+              cpu: "200m"
+            limits:
+              memory: "512Mi"
+              cpu: "800m"
+          extraEnv: &extraEnv
+            N8N_RUNNERS_ENABLED:
+              value: "true"
+            N8N_USER_FOLDER:
+              value: /home/node
+            N8N_PORT:
+              value: '5678'
+            N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS:
+              value: "true"
+            N8N_ENCRYPTION_KEY:
+              valueFrom:
+                secretKeyRef:
+                  name: n8n-secrets
+                  key: N8N_ENCRYPTION_KEY
+            WEBHOOK_URL:
+              value: https://n8n.whitediver.keenetic.link/
+          livenessProbe: null
+          readinessProbe: null
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            runAsNonRoot: true
+        webhook:
+          config:
+            executions_mode: queue
+            queue:
+              health:
+                check:
+                  active: true
+              bull:
+                redis:
+                  host: n8n-redis
+                  port: 6379
+          enabled: true
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "384Mi"
+              cpu: "500m"
+          extraEnv: *extraEnv
+          livenessProbe: null
+          readinessProbe: null
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            runAsNonRoot: true
+        main:
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "700m"
+            limits:
+              memory: "2Gi"
+              cpu: "2"
+          config:
+            db:
+              type: postgresdb
+              postgresdb:
+                host: postgres-n8n
+                port: 5432
+                database: n8n
+                user: n8n
+                # password injected via DB_POSTGRESDB_PASSWORD env (see extraEnv below)
+            queue:
+              health:
+                check:
+                  active: true
+              bull:
+                redis:
+                  host: n8n-redis
+                  port: 6379
+          extraEnv:
+            N8N_USER_FOLDER:
+              value: /home/node
+            N8N_EDITOR_BASE_URL:
+              value: https://n8n.whitediver.keenetic.link/
+            VUE_APP_URL_BASE_API:
+              value: https://n8n.whitediver.keenetic.link/
+            WEBHOOK_URL:
+              value: https://n8n.whitediver.keenetic.link/
+            N8N_HOST:
+              value: n8n.whitediver.keenetic.link
+            N8N_ENCRYPTION_KEY:
+              valueFrom:
+                secretKeyRef:
+                  name: n8n-secrets
+                  key: N8N_ENCRYPTION_KEY
+            DB_POSTGRESDB_PASSWORD:
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-n8n
+                  key: POSTGRES_PASSWORD
+            N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS:
+              value: "true"
+            N8N_PORT:
+              value: '5678'
+            N8N_PROXY_HOPS:
+              value: '3'
+            N8N_RUNNERS_ENABLED:
+              value: "true"
+            N8N_PROTOCOL:
+              value: https
+            N8N_SKIP_WEBHOOK_ORIGIN_CHECK:
+              value: "true"
+            N8N_DISABLE_PRODUCTION_MAIN_PROCESS:
+              value: "true"
+            NODE_ENV:
+              value: development
+          persistence:
+            enabled: false
+            storageClass: "smb"
+            type: dynamic
+          livenessProbe: null
+          readinessProbe: null
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            runAsNonRoot: true
+          podSecurityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+            runAsNonRoot: true
+          extraVolumeMounts:
+                - mountPath: /home/node/.cache
+                  name: n8n-cache
+          extraVolumes:
+            - name: n8n-cache
+              emptyDir: {}
+        extraManifests:
+          # Redis Deployment
+          - apiVersion: apps/v1
+            kind: Deployment
+            metadata:
+              name: redis-n8n
+              namespace: n8n
+              labels:
+                app: redis-n8n
+            spec:
+              replicas: 1
+              selector:
+                matchLabels:
+                  app: redis-n8n
+              template:
+                metadata:
+                  labels:
+                    app: redis-n8n
+                spec:
+                  containers:
+                    - name: redis
+                      image: redis:7
+                      imagePullPolicy: IfNotPresent
+                      ports:
+                        - containerPort: 6379
+                          name: redis
+                      resources:
+                        requests:
+                          memory: "64Mi"
+                          cpu: "50m"
+                        limits:
+                          memory: "128Mi"
+                          cpu: "200m"
+          # Redis Service
+          - apiVersion: v1
+            kind: Service
+            metadata:
+              name: n8n-redis
+              namespace: n8n
+            spec:
+              selector:
+                app: redis-n8n
+              ports:
+                - name: redis
+                  port: 6379
+                  targetPort: 6379
+          # PostgreSQL Deployment (consumes Secret postgres-n8n created out-of-band).
+          # Data lives directly on kube-master's local disk (see README) — no
+          # CIFS/PVC. hostPath is node-local, so the pod is pinned to kube-master
+          # and uses a Recreate strategy (never two postmasters on one PGDATA).
+          - apiVersion: apps/v1
+            kind: Deployment
+            metadata:
+              name: postgres-n8n
+              namespace: n8n
+              labels:
+                app: postgres-n8n
+            spec:
+              replicas: 1
+              strategy:
+                type: Recreate
+              selector:
+                matchLabels:
+                  app: postgres-n8n
+              template:
+                metadata:
+                  labels:
+                    app: postgres-n8n
+                spec:
+                  nodeSelector:
+                    kubernetes.io/hostname: kube-master
+                  securityContext:
+                    fsGroup: 999
+                    fsGroupChangePolicy: OnRootMismatch
+                  containers:
+                    - name: postgres
+                      image: postgres:15
+                      imagePullPolicy: IfNotPresent
+                      args:
+                        - -c
+                        - synchronous_commit=off
+                      env:
+                        - name: POSTGRES_DB
+                          valueFrom:
+                            secretKeyRef:
+                              name: postgres-n8n
+                              key: POSTGRES_DB
+                        - name: POSTGRES_USER
+                          valueFrom:
+                            secretKeyRef:
+                              name: postgres-n8n
+                              key: POSTGRES_USER
+                        - name: POSTGRES_PASSWORD
+                          valueFrom:
+                            secretKeyRef:
+                              name: postgres-n8n
+                              key: POSTGRES_PASSWORD
+                        - name: PGDATA
+                          value: /var/lib/postgresql/data/pgdata
+                      securityContext:
+                        runAsUser: 999
+                        runAsGroup: 999
+                      ports:
+                        - containerPort: 5432
+                          name: tcp
+                      volumeMounts:
+                        - name: data
+                          mountPath: /var/lib/postgresql/data
+                      resources:
+                        requests:
+                          memory: "128Mi"
+                          cpu: "100m"
+                        limits:
+                          memory: "256Mi"
+                          cpu: "500m"
+                  volumes:
+                    - name: data
+                      hostPath:
+                        # Same bytes the CIFS PVC used to serve; PGDATA=<here>/pgdata.
+                        # type: Directory => pod won't start if the path is missing
+                        # (fail-safe: never silently init an empty DB).
+                        path: /srv/kubernetes/nfs/smb-csi/pvc-n8n-postgres-n8n-pg
+                        type: Directory
+          # Service for PostgreSQL
+          - apiVersion: v1
+            kind: Service
+            metadata:
+              name: postgres-n8n
+              namespace: n8n
+            spec:
+              selector:
+                app: postgres-n8n
+              ports:
+                - name: tcp
+                  port: 5432
+                  targetPort: 5432
+        ingress:
+          enabled: true
+          className: "nginx"
+          annotations:
+            nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+            nginx.ingress.kubernetes.io/proxy-connect-timeout: "600"
+            nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+            nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+            nginx.ingress.kubernetes.io/proxy-next-upstream-timeout: "600"
+            nginx.ingress.kubernetes.io/proxy-buffering: "off"
+            nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+            nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+            nginx.ingress.kubernetes.io/upstream-keepalive-timeout: "600"
+          hosts:
+            - host: n8n.whitediver.keenetic.link
+              paths:
+                - path: /
+                  pathType: Prefix
+    chart: n8n
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: n8n
