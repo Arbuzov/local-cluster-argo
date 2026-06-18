@@ -88,3 +88,24 @@ kubectl -n n8n create secret generic postgres-n8n \
 kubectl apply -f ai/root.yaml
 kubectl -n n8n rollout status deploy/postgres-n8n
 ```
+
+## Backups
+
+A `CronJob` `n8n-backup` runs nightly (03:00) and exports **all workflows and
+credentials** to the `n8n-backup` PVC (`smb` class, share subdir
+`pvc-n8n-n8n-backup`), as timestamped JSON, 14-day retention. Credentials are
+exported **encrypted** — they're only restorable with the **same**
+`N8N_ENCRYPTION_KEY` (in the `n8n-secrets` Secret), so back that key up too.
+
+```sh
+# Run a backup now (don't wait for 03:00):
+kubectl -n n8n create job --from=cronjob/n8n-backup n8n-backup-manual
+
+# Restore into a (running) n8n — same encryption key required:
+n8n import:workflow --separate --input=/backup/workflows-YYYY-MM-DD.json
+n8n import:credentials --input=/backup/credentials-YYYY-MM-DD.json
+```
+
+A whole-DB `pg_dump` would be even simpler and captures everything (incl.
+executions), but isn't portable across n8n/Postgres versions — the per-object
+export above is the restorable, version-tolerant option.

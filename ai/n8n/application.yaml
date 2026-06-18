@@ -351,6 +351,89 @@ spec:
                 - name: tcp
                   port: 5432
                   targetPort: 5432
+          # PVC for backups — on the dynamic `smb` class (uid=999), so the job
+          # runs as 999 to be able to write. See README for restore steps.
+          - apiVersion: v1
+            kind: PersistentVolumeClaim
+            metadata:
+              name: n8n-backup
+              namespace: n8n
+            spec:
+              accessModes:
+                - ReadWriteOnce
+              resources:
+                requests:
+                  storage: 1Gi
+              storageClassName: smb
+          # Nightly export of all workflows + credentials (credentials stay
+          # ENCRYPTED — restorable only with the same N8N_ENCRYPTION_KEY) to the
+          # backup PVC, 14-day retention. Reads the DB directly (read-only), so
+          # it's safe to run alongside the live tiers.
+          - apiVersion: batch/v1
+            kind: CronJob
+            metadata:
+              name: n8n-backup
+              namespace: n8n
+            spec:
+              schedule: "0 3 * * *"
+              concurrencyPolicy: Forbid
+              successfulJobsHistoryLimit: 3
+              failedJobsHistoryLimit: 3
+              jobTemplate:
+                spec:
+                  backoffLimit: 1
+                  template:
+                    spec:
+                      restartPolicy: Never
+                      securityContext:
+                        runAsUser: 999
+                        runAsGroup: 999
+                        fsGroup: 999
+                      containers:
+                        - name: export
+                          image: n8nio/n8n:2.18.4
+                          imagePullPolicy: IfNotPresent
+                          env:
+                            - name: N8N_USER_FOLDER
+                              value: /tmp
+                            - name: DB_TYPE
+                              value: postgresdb
+                            - name: DB_POSTGRESDB_HOST
+                              value: postgres-n8n
+                            - name: DB_POSTGRESDB_PORT
+                              value: "5432"
+                            - name: DB_POSTGRESDB_DATABASE
+                              value: n8n
+                            - name: DB_POSTGRESDB_USER
+                              value: n8n
+                            - name: DB_POSTGRESDB_PASSWORD
+                              valueFrom:
+                                secretKeyRef:
+                                  name: postgres-n8n
+                                  key: POSTGRES_PASSWORD
+                            - name: N8N_ENCRYPTION_KEY
+                              valueFrom:
+                                secretKeyRef:
+                                  name: n8n-secrets
+                                  key: N8N_ENCRYPTION_KEY
+                          command:
+                            - sh
+                            - -c
+                            - |
+                              set -e
+                              ts=$(date +%F)
+                              n8n export:workflow --all --output=/backup/workflows-$ts.json
+                              n8n export:credentials --all --output=/backup/credentials-$ts.json
+                              find /backup -name 'workflows-*.json' -mtime +14 -delete
+                              find /backup -name 'credentials-*.json' -mtime +14 -delete
+                              ls -la /backup
+                          volumeMounts:
+                            - name: backup
+                              mountPath: /backup
+                      volumes:
+                        - name: backup
+                          persistentVolumeClaim:
+                            claimName: n8n-backup
         ingress:
           enabled: true
           className: "nginx"
