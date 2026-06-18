@@ -51,6 +51,13 @@ spec:
                 secretKeyRef:
                   name: n8n-secrets
                   key: N8N_ENCRYPTION_KEY
+            # worker/webhook need the DB password too (main has its own copy);
+            # without it they crash: "SASL: ... client password must be a string".
+            DB_POSTGRESDB_PASSWORD:
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-n8n
+                  key: POSTGRES_PASSWORD
             WEBHOOK_URL:
               value: https://n8n.whitediver.keenetic.link/
           livenessProbe: null
