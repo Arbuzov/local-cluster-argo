@@ -1,0 +1,28 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: networking
+  namespace: argo-cd
+spec:
+  description: >-
+    Networking / VPN gateway apps (openconnect-gateway, wg-vless-gateway,
+    wstunnel). Applied by hand — NOT wired into an app-of-apps.
+  sourceRepos:
+    # Application manifests live here; charts are pulled from home-cluster-helm.
+    - https://github.com/Arbuzov/local-cluster-argo.git
+    - https://github.com/Arbuzov/home-cluster-helm.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: vpn
+    - server: https://kubernetes.default.svc
+      namespace: wstunnel
+    - server: https://kubernetes.default.svc
+      namespace: mcp
+    - server: https://kubernetes.default.svc
+      namespace: argo-cd
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'

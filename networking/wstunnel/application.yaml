@@ -1,17 +1,17 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: openconnect-gateway
+  name: wstunnel
   namespace: argo-cd
 spec:
   project: networking
   source:
     repoURL: https://github.com/Arbuzov/home-cluster-helm.git
     targetRevision: HEAD
-    path: arbuzov/networking/openconnect-gateway
+    path: arbuzov/networking/wstunnel
   destination:
     server: https://kubernetes.default.svc
-    namespace: mcp
+    namespace: wstunnel
   syncPolicy:
     automated:
       prune: true
