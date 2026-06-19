@@ -12,8 +12,8 @@ spec:
   sourceRepos:
     # The app-of-apps reads the child Application manifests from this repo.
     - https://github.com/Arbuzov/local-cluster-argo.git
-    # Helm chart repo the keenetic-grafana-monitoring Application pulls from.
-    - https://helm.influxdata.com/
+    # Local wrapper chart the keenetic-grafana-monitoring Application pulls from.
+    - https://github.com/Arbuzov/home-cluster-helm.git
   destinations:
     - server: https://kubernetes.default.svc
       namespace: influxdb

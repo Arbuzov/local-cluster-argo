@@ -130,6 +130,7 @@ service's `README.md` has the concrete command):
 | `mcp/graphiti`          | `graphiti-neo4j-auth`, `graphiti-mcp-secrets` (Neo4j + OpenAI)                   |
 | `mcp/mcpo`              | `mcpo-secrets` (`config.json` incl. Home Assistant LLAT)                         |
 | `media/photoprism`      | `photoprism-basic-auth` (htpasswd)                                               |
+| `observability/keenetic-grafana-monitoring` | `keenetic-grafana-monitoring-config` (influxdb) — `config.ini` (router pw + InfluxDB token) |
 
 The remaining services have no secrets in their manifests.
 
