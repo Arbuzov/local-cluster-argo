@@ -34,7 +34,7 @@ kubectl create secret generic mcpo-secrets -n mcp \
 
 mcpo is deployed through the **`mcp` app-of-apps** (it belongs to the
 `mcp` AppProject) — there is no longer an `application.local.yaml`. Once
-the repo is on GitHub, `kubectl apply -f mcp/root.yaml` bootstraps the
+the repo is on GitHub, `kubectl apply -f mcp/bootstrap.yaml` bootstraps the
 whole `mcp` group and Argo CD keeps it synced. For a one-off direct apply
 you must create the project first (it carries `project: mcp`):
 

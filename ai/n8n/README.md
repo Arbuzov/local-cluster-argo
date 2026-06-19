@@ -85,7 +85,7 @@ kubectl -n n8n create secret generic postgres-n8n \
   --from-literal=POSTGRES_PASSWORD=REDACTED-EXAMPLE-PW
 
 # 3. Register the app-of-apps (one-time, like the apps/mcp/platform roots):
-kubectl apply -f ai/root.yaml
+kubectl apply -f ai/bootstrap.yaml
 kubectl -n n8n rollout status deploy/postgres-n8n
 ```
 

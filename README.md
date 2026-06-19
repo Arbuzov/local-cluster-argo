@@ -36,15 +36,15 @@ Two delivery models live side by side:
 
 ### App-of-apps groups — pull-based GitOps
 
-`apps/`, `mcp/` and `platform/` each ship a `root.yaml` app-of-apps that
+`apps/`, `mcp/` and `platform/` each ship a `bootstrap.yaml` app-of-apps that
 points Argo CD at this repo on GitHub over HTTPS and reconciles that group's
 `AppProject` (`<group>/project.yaml`) plus every enabled child `Application`
 automatically. Bootstrap each once, after the repo is pushed to GitHub:
 
 ```sh
-kubectl apply -f apps/root.yaml
-kubectl apply -f mcp/root.yaml
-kubectl apply -f platform/root.yaml
+kubectl apply -f apps/bootstrap.yaml
+kubectl apply -f mcp/bootstrap.yaml
+kubectl apply -f platform/bootstrap.yaml
 ```
 
 From then on Argo CD watches `main`: edit a `<group>/<service>/application.yaml`,
@@ -52,7 +52,7 @@ commit and push, and it syncs on its own (each app-of-apps runs `automated`
 sync with `prune` + `selfHeal`). The children belong to their group's
 AppProject (`project: apps` / `mcp` / `platform`); the app-of-apps itself stays
 in `default` so it can create that project. Each group's `README.md` documents
-which children are enabled vs. held back via the `root.yaml` `exclude` glob
+which children are enabled vs. held back via the `bootstrap.yaml` `exclude` glob
 (`platform/` currently deploys only `argo-cd` + `arc-operator`).
 
 ### Everything else — push-based
@@ -151,7 +151,7 @@ When standing up a fresh cluster:
    in `local-cluster-helm/arbuzov/platform/argo-cd/values.yaml`).
 2. Create `argocd-secret` in the `argo-cd` namespace
    (see `platform/argo-cd/README.md`).
-3. `kubectl apply -f platform/root.yaml` to bring up the `platform`
+3. `kubectl apply -f platform/bootstrap.yaml` to bring up the `platform`
    app-of-apps, which hands ownership of the Argo CD install over to Argo CD
    (the self-managing `argo-cd` child) and deploys `arc-operator`. Create
    `arc-operator`'s `controller-manager` Secret first (see

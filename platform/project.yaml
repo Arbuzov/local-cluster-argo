@@ -15,7 +15,7 @@ spec:
     # Helm chart repos the platform Applications pull from.
     - https://argoproj.github.io/argo-helm
     - https://actions-runner-controller.github.io/actions-runner-controller
-    # Add when kubernetes-dashboard / metrics-server are enabled in root.yaml:
+    # Add when kubernetes-dashboard / metrics-server are enabled in bootstrap.yaml:
     #   - https://kubernetes.github.io/dashboard/
     #   - https://kubernetes-sigs.github.io/metrics-server/
   destinations:
@@ -26,7 +26,7 @@ spec:
     # arc-operator (actions-runner-controller).
     - server: https://kubernetes.default.svc
       namespace: arc-system
-    # Add when enabling the disabled services in root.yaml:
+    # Add when enabling the disabled services in bootstrap.yaml:
     #   - namespace: kubernetes-dashboard   # kubernetes-dashboard
     #   - namespace: kube-system            # metrics-server
   clusterResourceWhitelist:
