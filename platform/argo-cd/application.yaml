@@ -19,6 +19,8 @@ spec:
     chart: argo-cd
     helm:
       values: |
+        crds:
+          install: false
         controller:
           replicaCount: 1
           resources:

@@ -152,8 +152,12 @@ Argo's watch set to cut watched-event volume and UI clutter:
 ## CRDs are NOT managed by Argo
 
 Because `CustomResourceDefinition` is in `resource.exclusions`, Argo CD will
-**not** apply the chart's CRDs during a self-sync. They must be updated
-out-of-band whenever the chart version bumps. Render them from the target chart
+**not** apply the chart's CRDs during a self-sync. `crds.install: false` in the
+values stops the chart from rendering them at all — otherwise Argo sees the
+three rendered CRDs (`applications`, `applicationsets`, `appprojects`) in the
+desired set but excluded from its watch, and raises a permanent
+`ExcludedResourceWarning` for each. They must be updated out-of-band whenever
+the chart version bumps. Render them from the target chart
 and server-side apply (server-side avoids the last-applied-config size limit on
 the large ApplicationSet CRD):
 
