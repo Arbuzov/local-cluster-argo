@@ -152,23 +152,6 @@ spec:
                       # Substituted at runtime from env HOMEPAGE_VAR_ARGOCD_TOKEN
                       # (Secret homepage-secrets). See README.md.
                       key: "{{HOMEPAGE_VAR_ARGOCD_TOKEN}}"
-                - Basic Memory (MCP):
-                    icon: mdi-brain
-                    description: Knowledge base
-                    href: https://dev.whitediver.keenetic.link/mcp/basic-memory
-                - Confluence (MCP):
-                    icon: confluence.png
-                    href: https://dev.whitediver.keenetic.link/mcp/confluence/
-                - Jira (MCP):
-                    icon: jira.png
-                    href: https://dev.whitediver.keenetic.link/mcp/jira/
-                - GitLab (MCP):
-                    icon: gitlab.png
-                    href: https://dev.whitediver.keenetic.link/mcp/gitlab/
-                - MCPO:
-                    icon: mdi-api
-                    description: MCP-to-OpenAPI proxy
-                    href: https://dev.whitediver.keenetic.link/mcpo/
 
           widgets:
             - logo:
