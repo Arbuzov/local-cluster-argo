@@ -1,0 +1,27 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: observability
+  namespace: argo-cd
+  annotations:
+    # Create the project before the Applications that reference it
+    # (the observability app-of-apps applies both in one sync).
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  description: Metrics / logs apps — deployed via the observability app-of-apps
+  sourceRepos:
+    # The app-of-apps reads the child Application manifests from this repo.
+    - https://github.com/Arbuzov/local-cluster-argo.git
+    # Helm chart repo the keenetic-grafana-monitoring Application pulls from.
+    - https://helm.influxdata.com/
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: influxdb
+    - server: https://kubernetes.default.svc
+      namespace: argo-cd
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'

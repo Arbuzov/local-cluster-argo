@@ -1,0 +1,33 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: keenetic-grafana-monitoring
+  namespace: argo-cd
+spec:
+  project: observability
+  source:
+    repoURL: https://helm.influxdata.com/
+    targetRevision: 0.1.0
+    chart: influxdb
+    helm:
+      values: |
+        affinity: {}
+        fullnameOverride: ""
+        image:
+          pullPolicy: IfNotPresent
+          repository: techh/keenetic-grafana-monitoring
+          tag: 2.0.2
+        imagePullSecrets: []
+        nameOverride: ""
+        nodeSelector: {}
+        resources: {}
+        tolerations: []
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: influxdb
+  syncPolicy:
+    automated:
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
