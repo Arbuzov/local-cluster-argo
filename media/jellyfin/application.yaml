@@ -1,0 +1,91 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: jellyfin
+  namespace: argo-cd
+spec:
+  project: default
+  source:
+    repoURL: https://jellyfin.github.io/jellyfin-helm
+    targetRevision: 2.3.0
+    helm:
+      values: |-
+        nodeSelector:
+          kubernetes.io/hostname: kube-master
+        resources:
+          requests:
+            memory: 512Mi
+          limits:
+            memory: 2Gi
+        persistence:
+          config:
+            storageClass: "smb-jellyfin"
+          media:
+            enabled: false
+        ingress:
+          enabled: true
+          className: "nginx"
+          annotations:
+            nginx.ingress.kubernetes.io/proxy-body-size: 5000m
+            nginx.ingress.kubernetes.io/ssl-redirect: "false"
+          hosts:
+            - paths:
+                - path: /jellyfin
+                  pathType: Prefix
+            - host: dev.whitediver.keenetic.link
+              paths:
+                - path: /jellyfin
+                  pathType: Prefix
+          tls:
+          - secretName: chart-jellyfin-tls
+            hosts:
+              - dev.whitediver.keenetic.link
+        volumes:
+          - name: books
+            hostPath:
+              path: /srv/kubernetes/nfs/books
+              type: ''
+          - name: homeassistant-media
+            hostPath:
+              path: /srv/kubernetes/nfs/homeassistant-media
+              type: ''
+          - name: music
+            hostPath:
+              path: /srv/kubernetes/nfs/music
+              type: ''
+          - name: pictures
+            hostPath:
+              path: /srv/kubernetes/nfs/pictures
+              type: ''
+          - name: videos
+            hostPath:
+              path: /srv/kubernetes/nfs/videos
+              type: ''
+        volumeMounts:
+          - name: books
+            mountPath: /share/samba/main/books
+          - name: homeassistant-media
+            mountPath: /share/samba/main/homeassistant-media
+          - name: music
+            mountPath: /share/samba/main/music
+          - name: pictures
+            mountPath: /share/samba/main/pictures
+          - name: videos
+            mountPath: /share/samba/main/videos
+        initContainers:
+          - name: set-base-url
+            image: busybox:1.36
+            command: ['sh', '-c', 'mkdir -p /config/config && if [ ! -f /config/config/network.xml ]; then printf "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<NetworkConfiguration>\n  <BaseUrl>/jellyfin</BaseUrl>\n</NetworkConfiguration>" > /config/config/network.xml; fi']
+            volumeMounts:
+              - name: config
+                mountPath: /config
+    chart: jellyfin
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: jellyfin
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
