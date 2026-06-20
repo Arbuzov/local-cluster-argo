@@ -13,6 +13,7 @@ spec:
       values: |
         controllers:
           pigallery2:
+            replicas: 0   # scaled to zero: keep the manifest, run no pods
             pod:
               nodeSelector:
                 kubernetes.io/hostname: kube-worker-1
