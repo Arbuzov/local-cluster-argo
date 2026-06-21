@@ -95,13 +95,11 @@ spec:
           # add them per service as the secrets land.
           services:
             - Multimedia:
-                - Jellyfin:
-                    icon: jellyfin.png
-                    description: Media server
-                    href: https://dev.whitediver.keenetic.link/jellyfin
-                - Photos:
-                    icon: pigallery2.png
-                    description: PiGallery2 photo gallery
+                # jellyfin + pigallery2 are held back via media/bootstrap.yaml
+                # (not deployed); photoprism now serves photos.whitediver...
+                - PhotoPrism:
+                    icon: photoprism.png
+                    description: Photo gallery
                     href: https://photos.whitediver.keenetic.link
             - Home:
                 - Home assistant:
