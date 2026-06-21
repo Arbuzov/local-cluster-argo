@@ -22,7 +22,11 @@ spec:
           PHOTOPRISM_PUBLIC: "false"        # OIDC requires non-public mode (public mode disables auth)
           PHOTOPRISM_DEFAULT_TLS: "false"
           PHOTOPRISM_LOG_LEVEL: "debug"
-          PHOTOPRISM_DATABASE_DSN: "index.db?_busy_timeout=15000&_journal=WAL&_txlock=immediate&cache=shared&_fk=1"
+          # Absolute path so the sqlite DB lands on the persistent storage
+          # volume, not the server's ephemeral CWD (/run, tmpfs). On SMB use a
+          # rollback journal (TRUNCATE) — WAL needs an mmap'd -shm file that
+          # CIFS can't provide; the smb mount uses nobrl + single writer.
+          PHOTOPRISM_DATABASE_DSN: "/photoprism/storage/index.db?_busy_timeout=30000&_journal=TRUNCATE&_txlock=immediate&_fk=1"
           PHOTOPRISM_DATABASE_CONNS: 1
           PHOTOPRISM_DATABASE_CONNS_IDLE: 0
           PHOTOPRISM_DISABLE_CHOWN: "true"
