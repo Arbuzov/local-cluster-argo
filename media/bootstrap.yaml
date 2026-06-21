@@ -23,7 +23,7 @@ spec:
       # finalizer, and all their data PVs are Retain, so a prune deletes the
       # workload but never the data. Editing this list requires re-applying the
       # app-of-apps (it never manages itself) — see media/README.md.
-      exclude: '{opds-shelf/application.yaml,jellyfin/application.yaml,pigallery2/application.yaml}'
+      exclude: '{jellyfin/application.yaml,pigallery2/application.yaml}'
   destination:
     server: https://kubernetes.default.svc
     namespace: argo-cd

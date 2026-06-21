@@ -3,6 +3,8 @@ kind: Application
 metadata:
   name: opds-shelf
   namespace: argo-cd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
 spec:
   project: media
   source:
@@ -42,13 +44,13 @@ spec:
             port: 8080
           persistence:
             enabled: true
-            storageClassName: "basic-memory-smb"
+            storageClassName: "smb"
             accessModes: ["ReadWriteOnce"]
             size: 2Gi
             mountPath: /config
           env:
-            PUID: "1000"
-            PGID: "1000"
+            PUID: "999"
+            PGID: "999"
             TZ: "Europe/Moscow"
           resources:
             requests:
@@ -68,13 +70,13 @@ spec:
             port: 8083
           persistence:
             enabled: true
-            storageClassName: "basic-memory-smb"
+            storageClassName: "smb"
             accessModes: ["ReadWriteOnce"]
             size: 2Gi
             mountPath: /config
           env:
-            PUID: "1000"
-            PGID: "1000"
+            PUID: "999"
+            PGID: "999"
             TZ: "Europe/Moscow"
             ENABLE_LIBRARY_WRITE: "false"
           resources:
@@ -121,27 +123,7 @@ spec:
           securityContext: {}
 
         ingress:
-          enabled: true
-          className: "nginx"
-          annotations:
-            nginx.ingress.kubernetes.io/ssl-redirect: "false"
-            nginx.ingress.kubernetes.io/proxy-body-size: 100m
-          hosts:
-            - host: dev.whitediver.keenetic.link
-              paths:
-                - path: /opds
-                  pathType: Prefix
-                  service: opdsAggregator
-                  port: 8080
-                - path: /calibre-web
-                  pathType: Prefix
-                  service: calibreWeb
-                  port: 8083
-                - path: /calibre
-                  pathType: Prefix
-                  service: calibre
-                  port: 8080
-          tls: []
+          enabled: false
     chart: opds-shelf
   destination:
     server: https://kubernetes.default.svc
@@ -152,3 +134,208 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: opds-shelf
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: opds-shelf-library
+spec:
+  capacity:
+    storage: 50Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  claimRef:
+    namespace: opds-shelf
+    name: opds-shelf-library
+  mountOptions:
+    - dir_mode=0755
+    - file_mode=0644
+    - uid=999
+    - gid=999
+    - vers=3.1.1
+    - serverino
+    - nobrl
+  csi:
+    driver: smb.csi.k8s.io
+    volumeHandle: opds-shelf-library
+    nodeStageSecretRef:
+      name: smbcreds
+      namespace: smb
+    volumeAttributes:
+      source: "//192.168.99.44/books"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: opds-shelf-library
+  namespace: opds-shelf
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 50Gi
+  volumeName: opds-shelf-library
+  storageClassName: ""
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opds-shelf-oauth2
+  namespace: opds-shelf
+  labels:
+    app.kubernetes.io/name: opds-shelf-oauth2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: opds-shelf-oauth2
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: opds-shelf-oauth2
+    spec:
+      containers:
+        - name: oauth2-proxy
+          image: quay.io/oauth2-proxy/oauth2-proxy:v7.7.1
+          args:
+            - --provider=google
+            - --email-domain=whitediver.com
+            - --http-address=0.0.0.0:4180
+            - --reverse-proxy=true
+            - --cookie-secure=false
+            - --skip-provider-button=true
+            - --redirect-url=https://dev.whitediver.keenetic.link/oauth2/callback
+            - --whitelist-domain=dev.whitediver.keenetic.link
+            - --cookie-domain=dev.whitediver.keenetic.link
+            - --upstream=static://200
+          env:
+            - name: OAUTH2_PROXY_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: opds-shelf-oauth2
+                  key: client-id
+            - name: OAUTH2_PROXY_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: opds-shelf-oauth2
+                  key: client-secret
+            - name: OAUTH2_PROXY_COOKIE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: opds-shelf-oauth2
+                  key: cookie-secret
+          ports:
+            - name: http
+              containerPort: 4180
+          resources:
+            requests:
+              memory: "32Mi"
+              cpu: "10m"
+            limits:
+              memory: "64Mi"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: opds-shelf-oauth2
+  namespace: opds-shelf
+  labels:
+    app.kubernetes.io/name: opds-shelf-oauth2
+spec:
+  selector:
+    app.kubernetes.io/name: opds-shelf-oauth2
+  ports:
+    - name: http
+      port: 4180
+      targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: opds-shelf-auth
+  namespace: opds-shelf
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: dev.whitediver.keenetic.link
+      http:
+        paths:
+          - path: /oauth2
+            pathType: Prefix
+            backend:
+              service:
+                name: opds-shelf-oauth2
+                port:
+                  number: 4180
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: opds-shelf-ui
+  namespace: opds-shelf
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    nginx.ingress.kubernetes.io/auth-url: "http://opds-shelf-oauth2.opds-shelf.svc.cluster.local:4180/oauth2/auth"
+    nginx.ingress.kubernetes.io/auth-signin: "https://dev.whitediver.keenetic.link/oauth2/start?rd=$escaped_request_uri"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: dev.whitediver.keenetic.link
+      http:
+        paths:
+          - path: /calibre-web
+            pathType: Prefix
+            backend:
+              service:
+                name: opds-shelf-calibreweb
+                port:
+                  number: 8083
+          - path: /calibre
+            pathType: Prefix
+            backend:
+              service:
+                name: opds-shelf-calibre
+                port:
+                  number: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: opds-shelf-opds
+  namespace: opds-shelf
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: opds-shelf-basic-auth
+    nginx.ingress.kubernetes.io/auth-realm: "opds-shelf OPDS"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: dev.whitediver.keenetic.link
+      http:
+        paths:
+          - path: /opds
+            pathType: Prefix
+            backend:
+              service:
+                name: opds-shelf-opdsagg
+                port:
+                  number: 8080
