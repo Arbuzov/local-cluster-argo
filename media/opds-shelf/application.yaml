@@ -1,0 +1,154 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: opds-shelf
+  namespace: argo-cd
+spec:
+  project: media
+  source:
+    repoURL: https://arbuzov.github.io/opds-shelf/
+    targetRevision: 0.3.0
+    helm:
+      values: |-
+        fullnameOverride: "opds-shelf"
+
+        global:
+          timezone: "Europe/Moscow"
+
+        library:
+          persistence:
+            enabled: true
+            existingClaim: "opds-shelf-library"
+          mountPath: /books
+          calibreWebReadOnly: true
+
+        ingest:
+          enabled: true
+          persistence:
+            enabled: true
+            storageClassName: "smb"
+            accessModes: ["ReadWriteOnce"]
+            size: 5Gi
+          mountPath: /ingest
+
+        calibre:
+          enabled: true
+          image:
+            repository: ghcr.io/linuxserver/calibre
+            tag: latest
+            pullPolicy: IfNotPresent
+          service:
+            type: ClusterIP
+            port: 8080
+          persistence:
+            enabled: true
+            storageClassName: "basic-memory-smb"
+            accessModes: ["ReadWriteOnce"]
+            size: 2Gi
+            mountPath: /config
+          env:
+            PUID: "1000"
+            PGID: "1000"
+            TZ: "Europe/Moscow"
+          resources:
+            requests:
+              memory: "256Mi"
+            limits:
+              memory: "512Mi"
+          securityContext: {}
+
+        calibreWeb:
+          enabled: true
+          image:
+            repository: ghcr.io/linuxserver/calibre-web
+            tag: latest
+            pullPolicy: IfNotPresent
+          service:
+            type: ClusterIP
+            port: 8083
+          persistence:
+            enabled: true
+            storageClassName: "basic-memory-smb"
+            accessModes: ["ReadWriteOnce"]
+            size: 2Gi
+            mountPath: /config
+          env:
+            PUID: "1000"
+            PGID: "1000"
+            TZ: "Europe/Moscow"
+            ENABLE_LIBRARY_WRITE: "false"
+          resources:
+            requests:
+              memory: "128Mi"
+            limits:
+              memory: "384Mi"
+          securityContext: {}
+
+        opdsAggregator:
+          enabled: true
+          image:
+            repository: ghcr.io/madeddie/opds-aggregator
+            tag: latest
+            pullPolicy: IfNotPresent
+          service:
+            type: ClusterIP
+            port: 8080
+          auth:
+            enabled: false
+          config:
+            feeds:
+              - name: "local-calibreweb"
+                url: ""
+                pollDepth: 1
+          resources:
+            requests:
+              memory: "64Mi"
+            limits:
+              memory: "128Mi"
+
+        importer:
+          enabled: true
+          schedule: "*/30 * * * *"
+          image:
+            repository: ghcr.io/linuxserver/calibre
+            tag: latest
+            pullPolicy: IfNotPresent
+          resources:
+            requests:
+              memory: "128Mi"
+            limits:
+              memory: "256Mi"
+          securityContext: {}
+
+        ingress:
+          enabled: true
+          className: "nginx"
+          annotations:
+            nginx.ingress.kubernetes.io/ssl-redirect: "false"
+            nginx.ingress.kubernetes.io/proxy-body-size: 100m
+          hosts:
+            - host: dev.whitediver.keenetic.link
+              paths:
+                - path: /opds
+                  pathType: Prefix
+                  service: opdsAggregator
+                  port: 8080
+                - path: /calibre-web
+                  pathType: Prefix
+                  service: calibreWeb
+                  port: 8083
+                - path: /calibre
+                  pathType: Prefix
+                  service: calibre
+                  port: 8080
+          tls: []
+    chart: opds-shelf
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: opds-shelf
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

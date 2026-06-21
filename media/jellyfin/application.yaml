@@ -3,14 +3,16 @@ kind: Application
 metadata:
   name: jellyfin
   namespace: argo-cd
+  finalizers:  # cascade-delete this app's resources when removed from the media app-of-apps; the config PV is Retain, so data survives — see media/README.md
+    - resources-finalizer.argocd.argoproj.io
 spec:
-  project: default
+  project: media
   source:
     repoURL: https://jellyfin.github.io/jellyfin-helm
     targetRevision: 2.3.0
     helm:
       values: |-
-        replicaCount: 0   # scaled to zero: keep the manifest, run no pods
+        replicaCount: 1
         nodeSelector:
           kubernetes.io/hostname: kube-master
         resources:

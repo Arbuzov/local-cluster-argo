@@ -4,9 +4,9 @@ metadata:
   name: media
   namespace: argo-cd
 spec:
-  # App-of-apps for the media group. Unlike apps/mcp/platform this group has
-  # no dedicated AppProject — every media child Application uses
-  # `project: default`, so this app-of-apps stays in `default` too.
+  # App-of-apps for the media group. Stays in the always-present `default`
+  # project so it can create the `media` AppProject (project.yaml, sync-wave
+  # -1); the child Applications all carry `project: media`.
   project: default
   source:
     repoURL: https://github.com/Arbuzov/local-cluster-argo.git
@@ -14,12 +14,16 @@ spec:
     path: media
     directory:
       recurse: true
-      # Every service's Application manifest. bootstrap.yaml sits at the
-      # media/ root, so `*/application*.yaml` never matches it — the
-      # app-of-apps doesn't manage itself.
-      include: '{*/application*.yaml}'
-      # opds-shelf stays in git but is held back from this cluster.
-      exclude: '{opds-shelf/application.yaml}'
+      # project.yaml (the AppProject) + every service's Application manifest.
+      # bootstrap.yaml sits at the media/ root, so `*/application*.yaml` never
+      # matches it — the app-of-apps doesn't manage itself.
+      include: '{project.yaml,*/application*.yaml}'
+      # Kept in git but held back from this cluster. Disabling here (rather than
+      # replicas:0) is the on/off switch — children carry the Argo cascade
+      # finalizer, and all their data PVs are Retain, so a prune deletes the
+      # workload but never the data. Editing this list requires re-applying the
+      # app-of-apps (it never manages itself) — see media/README.md.
+      exclude: '{opds-shelf/application.yaml,jellyfin/application.yaml,pigallery2/application.yaml}'
   destination:
     server: https://kubernetes.default.svc
     namespace: argo-cd

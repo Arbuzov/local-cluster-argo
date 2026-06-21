@@ -3,8 +3,10 @@ kind: Application
 metadata:
   name: pigallery2
   namespace: argo-cd
+  finalizers:  # cascade-delete this app's resources when removed from the media app-of-apps; config + photos PVs are Retain, so data survives — see media/README.md
+    - resources-finalizer.argocd.argoproj.io
 spec:
-  project: default
+  project: media
   source:
     repoURL: https://bjw-s-labs.github.io/helm-charts
     chart: app-template
@@ -13,7 +15,7 @@ spec:
       values: |
         controllers:
           pigallery2:
-            replicas: 0   # scaled to zero: keep the manifest, run no pods
+            replicas: 1
             pod:
               nodeSelector:
                 kubernetes.io/hostname: kube-worker-1
@@ -42,10 +44,10 @@ spec:
                 port: 80
         ingress:
           app:
-            # Disabled while pigallery2 is parked at replicas 0 — photoprism now
-            # serves photos.whitediver.keenetic.link. To hand the host back:
-            # re-enable this and disable the photoprism ingress.
-            enabled: false
+            # NOTE: photoprism currently serves photos.whitediver.keenetic.link.
+            # pigallery2 is held back from the cluster via the media bootstrap
+            # exclude (not deployed), so this ingress is dormant and does not
+            # clash. If pigallery2 is re-enabled, move the host off photoprism.
             className: nginx
             annotations:
               nginx.ingress.kubernetes.io/ssl-redirect: "false"

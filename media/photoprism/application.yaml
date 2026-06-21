@@ -4,7 +4,7 @@ metadata:
   name: photoprism
   namespace: argo-cd
 spec:
-  project: default
+  project: media
   source:
     repoURL: https://andrenarchy.github.io/helm-charts
     chart: photoprism
