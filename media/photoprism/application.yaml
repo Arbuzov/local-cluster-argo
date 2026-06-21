@@ -19,7 +19,7 @@ spec:
           PHOTOPRISM_WORKERS: "2"          # cap indexing concurrency (default = #cores) to bound RAM/CPU spikes
           PHOTOPRISM_DEBUG: "false"
           PHOTOPRISM_READONLY: "true"
-          PHOTOPRISM_PUBLIC: "true"
+          PHOTOPRISM_PUBLIC: "false"        # OIDC requires non-public mode (public mode disables auth)
           PHOTOPRISM_DEFAULT_TLS: "false"
           PHOTOPRISM_LOG_LEVEL: "debug"
           PHOTOPRISM_DATABASE_DSN: "index.db?_busy_timeout=15000&_journal=WAL&_txlock=immediate&cache=shared&_fk=1"
@@ -27,6 +27,30 @@ spec:
           PHOTOPRISM_DATABASE_CONNS_IDLE: 0
           PHOTOPRISM_DISABLE_CHOWN: "true"
           UID: "999"
+          # Google OIDC via the cluster's shared Google OAuth client (same one
+          # argo-cd/vikunja use). Client id/secret + a generated admin password
+          # are injected from Secret `photoprism-oidc` (created out-of-band, see
+          # README.md). The shared Google client MUST list this redirect URI:
+          #   https://photos.whitediver.keenetic.link/api/v1/oidc/redirect
+          # Allowlist is inherited from that client's Google consent screen.
+          PHOTOPRISM_OIDC_URI: "https://accounts.google.com"
+          PHOTOPRISM_OIDC_PROVIDER: "Google"
+          PHOTOPRISM_OIDC_REGISTER: "true"
+          PHOTOPRISM_OIDC_CLIENT:
+            valueFrom:
+              secretKeyRef:
+                name: photoprism-oidc
+                key: client-id
+          PHOTOPRISM_OIDC_SECRET:
+            valueFrom:
+              secretKeyRef:
+                name: photoprism-oidc
+                key: client-secret
+          PHOTOPRISM_ADMIN_PASSWORD:
+            valueFrom:
+              secretKeyRef:
+                name: photoprism-oidc
+                key: admin-password
         securityContext:
           runAsUser: 999
           runAsGroup: 999
@@ -101,9 +125,10 @@ spec:
               # same as pigallery2/jellyfin on this cluster.
               nginx.ingress.kubernetes.io/ssl-redirect: "false"
               nginx.ingress.kubernetes.io/proxy-body-size: "100m"
-              nginx.ingress.kubernetes.io/auth-type: basic
-              nginx.ingress.kubernetes.io/auth-secret: photoprism-basic-auth
-              nginx.ingress.kubernetes.io/auth-realm: "Authentication Required"
+              # No basic-auth: PhotoPrism handles login itself (Google OIDC +
+              # admin password, PHOTOPRISM_PUBLIC=false). The OIDC callback
+              # /api/v1/oidc/redirect must be reachable without an outer auth
+              # layer, so the nginx basic-auth annotations are removed.
             hosts:
               - host: photos.whitediver.keenetic.link
                 paths:
