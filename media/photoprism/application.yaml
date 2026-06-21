@@ -16,7 +16,8 @@ spec:
           tag: "latest"
         env:
           PHOTOPRISM_SITE_URL: "https://photos.whitediver.keenetic.link/"
-          PHOTOPRISM_WORKERS: "2"          # cap indexing concurrency (default = #cores) to bound RAM/CPU spikes
+          PHOTOPRISM_WORKERS: "1"               # single-threaded indexing — bounds RAM/CPU on this small cluster
+          PHOTOPRISM_DISABLE_TENSORFLOW: "true" # no TF classification/faces — TF is the big RAM consumer
           PHOTOPRISM_DEBUG: "false"
           PHOTOPRISM_READONLY: "true"
           PHOTOPRISM_PUBLIC: "false"        # OIDC requires non-public mode (public mode disables auth)
