@@ -100,6 +100,13 @@ Google client id/secret and `active=1`; a pod restart then registers the
 > **not** work — ingress-nginx overrides `$pass_access_scheme` internally.) That
 > controller lives in `local-cluster-helm` — persist the setting there (it's set
 > at runtime here).
+>
+> **flask_dance + Google scope:** Google returns an extra `openid` scope, which
+> oauthlib rejects ("Scope has changed" → 500 on the callback). Fixed with
+> `calibreWeb.extraEnv.OAUTHLIB_RELAX_TOKEN_SCOPE: "1"` — needs the opds-shelf
+> chart **≥ 0.4.0** (which added the `extraEnv` passthrough). Also requires
+> `config_login_type=2` in `app.db` for the profile Link button to appear (local
+> `admin` login still works).
 
 **Access control / first login:** Calibre-Web has no email-domain filter, so
 keep public registration **off** and link accounts explicitly. Log in once
