@@ -67,45 +67,38 @@ instead of provisioning its own.
 ## Auth & URLs
 
 The chart's single ingress is disabled (`ingress.enabled: false`); routing is
-hand-rolled into separate Ingresses:
+hand-rolled:
 
 | Ingress | URL | Gate |
 | --- | --- | --- |
-| `opds-shelf-calibreweb` | `books.whitediver.keenetic.link/` | **Google SSO** (oauth2-proxy) |
-| `opds-shelf-auth` | `books.whitediver.keenetic.link/oauth2` | none (the oauth2-proxy endpoints — gating them would loop) |
+| `opds-shelf-calibreweb` | `books.whitediver.keenetic.link/` | **Google login** (Calibre-Web native OAuth) |
 | `opds-shelf-opds` | `dev.whitediver.keenetic.link/opds` | **HTTP basic-auth** (`opds-shelf-basic-auth`) — e-reader clients can't do a Google browser flow |
 
 **Calibre-Web runs at a subdomain root** (`books.whitediver.keenetic.link`),
-like photoprism — *not* a subpath. This is deliberate: under a subpath
-Calibre-Web emits root-relative links (`/admin/...` → 404) unless the proxy
-sets an `X-Script-Name` header, and that needs an nginx `configuration-snippet`,
-which this controller blocks (`annotations-risk-level` < `Critical`). At a
-root, no header is needed. The KasmVNC **calibre desktop** UI was dropped for
-the same reason (it has the same subpath problem); the `calibre` StatefulSet
-still runs for `calibredb`/library management.
+like photoprism — *not* a subpath (under a subpath it emits root-relative links
+that 404 without an `X-Script-Name` header, which needs a snippet this nginx
+controller blocks). The KasmVNC **calibre desktop** UI was dropped (same subpath
+problem); the `calibre` StatefulSet still runs for `calibredb`/library
+management.
 
-Google SSO is an in-namespace **`oauth2-proxy`** (Deployment + Service) on the
-same `books.` host: nginx calls its `/oauth2/auth` (in-cluster) via `auth-url`;
-on 401 it redirects the browser to `/oauth2/start` (`auth-signin`) → Google →
-`/oauth2/callback`. It reuses the cluster's shared Google OAuth client and
-restricts logins to `--email-domain=whitediver.com`. `--redirect-url`,
-`--cookie-domain`, `--whitelist-domain` are all `books.whitediver.keenetic.link`.
-`--cookie-secure=false` because the Keenetic router terminates TLS and forwards
-plain HTTP to nginx (same reason every ingress here sets `ssl-redirect: "false"`).
+**Google login is Calibre-Web's built-in OAuth** (flask_dance) — there is no
+oauth2-proxy. It's enabled in the `oauthProvider` table of `app.db` (runtime
+state on the config PVC, *not* git): the `google` row gets the cluster's shared
+Google client id/secret and `active=1`; a pod restart then registers the
+`/login/<provider>` blueprint.
 
 > The shared Google OAuth client **must list the redirect URI**
-> `https://books.whitediver.keenetic.link/oauth2/callback`, and the Keenetic
-> router/DNS must route `books.whitediver.keenetic.link` to the cluster (as it
-> already does for `photos.`/`dev.`/etc.).
+> `https://books.whitediver.keenetic.link/login/google/authorized`, and the
+> Keenetic router/DNS must route `books.whitediver.keenetic.link` to the cluster
+> (it does — KeenDNS preset `books`). The router passes `X-Forwarded-Proto`, so
+> Calibre-Web builds the `https://` callback correctly.
 
-oauth2-proxy is pinned to `kube-master` (`nodeSelector`) because that is the
-only node here that reaches `quay.io` (its CDN times out from the workers);
-every other image in this stack is on ghcr.io/docker.io, which the workers can
-pull.
-
-After Google you still hit Calibre-Web's **own** login (default
-`admin`/`admin123` — change it). To make the proxy the only gate, configure
-Calibre-Web's reverse-proxy login header instead.
+**Access control / first login:** Calibre-Web has no email-domain filter, so
+keep public registration **off** and link accounts explicitly. Log in once
+locally (`admin`/`admin123` — change it), open Profile → **Link to Google**;
+afterwards "Login with Google" signs that user in. Setting the client id/secret
+alone does *not* grant access — an unlinked Google account can't log in unless
+registration is open.
 
 ## Calibre-Web first run (one-time, on the config PVC — not git)
 
@@ -122,6 +115,11 @@ runtime state, not GitOps. On a fresh config volume:
    restart the calibre-web pod.
 3. Import the ~2.5 GB of loose books when ready (drop into `/ingest` for the
    importer, or `calibredb add --with-library /books <files>`).
+4. Enable Google login: set the shared Google client id/secret on the `google`
+   row of `oauthProvider` and `active=1`, restart the pod (registers
+   `/login/google`), then — logged in as `admin` — Profile → **Link to Google**.
+   Register `https://books.whitediver.keenetic.link/login/google/authorized` on
+   the Google client.
 
 > Do **not** carry a stale `app.db` across a major Calibre-Web version: the
 > image is `:latest`, and a schema-incompatible `app.db` makes every request
@@ -131,24 +129,18 @@ runtime state, not GitOps. On a fresh config volume:
 
 ## Secrets
 
-Two out-of-band Secrets (nothing sensitive in git, per repo convention):
+One out-of-band Secret — htpasswd for the `/opds` basic-auth gate (e-reader
+credentials):
 
 ```sh
-# 1. Google OAuth client for oauth2-proxy. Reuse the shared Google client
-#    (the one ArgoCD/vikunja/photoprism use) and add this redirect URI to it:
-#      https://dev.whitediver.keenetic.link/oauth2/callback
-kubectl -n opds-shelf create secret generic opds-shelf-oauth2 \
-  --from-literal=client-id='<google-client-id>' \
-  --from-literal=client-secret='<google-client-secret>' \
-  --from-literal=cookie-secret="$(openssl rand -base64 48 | tr -dc 'A-Za-z0-9' | head -c 32)"
-
-# 2. htpasswd for the /opds basic-auth gate (e-reader credentials)
 kubectl -n opds-shelf create secret generic opds-shelf-basic-auth \
   --from-literal=auth="$(htpasswd -nbB reader '<password>')"
 ```
 
-It also relies on the cluster-wide `smbcreds` Secret (namespace `smb`) that
-every SMB mount already uses.
+Google login uses Calibre-Web's **native OAuth**, configured in `app.db` (the
+`oauthProvider` table, reusing the cluster's shared Google client id/secret) —
+**not** a k8s Secret. Also relies on the cluster-wide `smbcreds` Secret
+(namespace `smb`) that every SMB mount already uses.
 
 ## Enable
 
