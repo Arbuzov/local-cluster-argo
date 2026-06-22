@@ -76,10 +76,9 @@ hand-rolled:
 
 **Calibre-Web runs at a subdomain root** (`books.whitediver.keenetic.link`),
 like photoprism — *not* a subpath (under a subpath it emits root-relative links
-that 404 without an `X-Script-Name` header, which needs a snippet this nginx
-controller blocks). The KasmVNC **calibre desktop** UI was dropped (same subpath
-problem); the `calibre` StatefulSet still runs for `calibredb`/library
-management.
+that 404 without an `X-Script-Name` header; a root needs no such header for
+routing). The KasmVNC **calibre desktop** UI was dropped (same subpath problem);
+the `calibre` StatefulSet still runs for `calibredb`/library management.
 
 **Google login is Calibre-Web's built-in OAuth** (flask_dance) — there is no
 oauth2-proxy. It's enabled in the `oauthProvider` table of `app.db` (runtime
@@ -90,8 +89,16 @@ Google client id/secret and `active=1`; a pod restart then registers the
 > The shared Google OAuth client **must list the redirect URI**
 > `https://books.whitediver.keenetic.link/login/google/authorized`, and the
 > Keenetic router/DNS must route `books.whitediver.keenetic.link` to the cluster
-> (it does — KeenDNS preset `books`). The router passes `X-Forwarded-Proto`, so
-> Calibre-Web builds the `https://` callback correctly.
+> (it does — KeenDNS preset `books`).
+>
+> **https callback:** the router terminates TLS, so nginx sees plain HTTP and
+> Calibre-Web — which derives the scheme **only** from the `X-Scheme` header
+> (`reverseproxy.py`), not `X-Forwarded-Proto` — would build an `http://`
+> callback that Google rejects. The Ingress therefore injects `X-Scheme: https`
+> via a `configuration-snippet`, which needs the ingress-nginx controller to
+> allow snippets: `allow-snippet-annotations: true` + `annotations-risk-level:
+> Critical` on its ConfigMap. That controller lives in `local-cluster-helm` —
+> persist the setting there (set here at runtime).
 
 **Access control / first login:** Calibre-Web has no email-domain filter, so
 keep public registration **off** and link accounts explicitly. Log in once
