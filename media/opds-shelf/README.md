@@ -90,6 +90,35 @@ only node here that reaches `quay.io` (its CDN times out from the workers);
 every other image in this stack is on ghcr.io/docker.io, which the workers can
 pull.
 
+Calibre-Web is served under the `/calibre-web` subpath, so it has its **own**
+Ingress (`opds-shelf-calibreweb`) that injects `X-Script-Name: /calibre-web`
+(`configuration-snippet`). Calibre-Web reads that header to prefix every
+generated URL/redirect — without it, links point at `/admin/...` on the root
+host and 404. `/calibre` (the KasmVNC desktop) is a separate Ingress and does
+**not** get this header.
+
+## Calibre-Web first run (one-time, on the config PVC — not git)
+
+Calibre-Web's state lives in `app.db` on the `opds-shelf-calibreweb-config`
+volume; the library is a Calibre DB (`metadata.db`) at `/books`. Both are
+runtime state, not GitOps. On a fresh config volume:
+
+1. Create an empty library so `/books` is a valid Calibre DB (the `books`
+   share is a flat dump with no `metadata.db`):
+   `kubectl exec -n opds-shelf opds-shelf-calibre-0 -- calibredb list --with-library /books`
+2. Point Calibre-Web at it (its DB-config UI is the only in-app way, so set it
+   directly):
+   `UPDATE settings SET config_calibre_dir='/books'` in `/config/app.db`, then
+   restart the calibre-web pod.
+3. Import the ~2.5 GB of loose books when ready (drop into `/ingest` for the
+   importer, or `calibredb add --with-library /books <files>`).
+
+> Do **not** carry a stale `app.db` across a major Calibre-Web version: the
+> image is `:latest`, and a schema-incompatible `app.db` makes every request
+> 500 (`loadSettings` → `'NoneType' has no attribute 'name'`). If that happens,
+> move `app.db` aside and let the pod rebuild it, then redo steps 2–3. Pinning
+> the image to a fixed tag avoids the surprise.
+
 ## Secrets
 
 Two out-of-band Secrets (nothing sensitive in git, per repo convention):
