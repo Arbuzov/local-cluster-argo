@@ -64,38 +64,48 @@ the child's `CreateNamespace=true` is a harmless fallback. The chart keeps
 `library.persistence.existingClaim: opds-shelf-library`, so it consumes this PVC
 instead of provisioning its own.
 
-## Auth
+## Auth & URLs
 
-Three hand-rolled Ingresses replace the chart's single one
-(`ingress.enabled: false`), because nginx auth annotations are per-Ingress, not
-per-path:
+The chart's single ingress is disabled (`ingress.enabled: false`); routing is
+hand-rolled into separate Ingresses:
 
-| Ingress | Path(s) | Gate | Why |
-| --- | --- | --- | --- |
-| `opds-shelf-ui` | `/calibre-web`, `/calibre` | **Google SSO** (oauth2-proxy) | browser UIs — interactive login is fine |
-| `opds-shelf-opds` | `/opds` | **HTTP basic-auth** (`opds-shelf-basic-auth`) | e-reader OPDS clients (KOReader, Moon+, …) can't do a Google browser flow |
-| `opds-shelf-auth` | `/oauth2` | none | the oauth2-proxy endpoints themselves (`/oauth2/start`, `/callback`, `/auth`) — gating these would loop |
+| Ingress | URL | Gate |
+| --- | --- | --- |
+| `opds-shelf-calibreweb` | `books.whitediver.keenetic.link/` | **Google SSO** (oauth2-proxy) |
+| `opds-shelf-auth` | `books.whitediver.keenetic.link/oauth2` | none (the oauth2-proxy endpoints — gating them would loop) |
+| `opds-shelf-opds` | `dev.whitediver.keenetic.link/opds` | **HTTP basic-auth** (`opds-shelf-basic-auth`) — e-reader clients can't do a Google browser flow |
 
-Google SSO is an in-namespace **`oauth2-proxy`** (Deployment + Service): nginx
-calls its `/oauth2/auth` (in-cluster) via `auth-url`; on 401 it redirects the
-browser to `/oauth2/start` (`auth-signin`) → Google → `/oauth2/callback`. It
-reuses the cluster's shared Google OAuth client and restricts logins to
-`--email-domain=whitediver.com` (change to an allow-list if you need specific
-addresses). `--cookie-secure=false` + an explicit `--redirect-url` because the
-Keenetic router terminates TLS and forwards plain HTTP to nginx (same reason
-every ingress here sets `ssl-redirect: "false"`).
+**Calibre-Web runs at a subdomain root** (`books.whitediver.keenetic.link`),
+like photoprism — *not* a subpath. This is deliberate: under a subpath
+Calibre-Web emits root-relative links (`/admin/...` → 404) unless the proxy
+sets an `X-Script-Name` header, and that needs an nginx `configuration-snippet`,
+which this controller blocks (`annotations-risk-level` < `Critical`). At a
+root, no header is needed. The KasmVNC **calibre desktop** UI was dropped for
+the same reason (it has the same subpath problem); the `calibre` StatefulSet
+still runs for `calibredb`/library management.
+
+Google SSO is an in-namespace **`oauth2-proxy`** (Deployment + Service) on the
+same `books.` host: nginx calls its `/oauth2/auth` (in-cluster) via `auth-url`;
+on 401 it redirects the browser to `/oauth2/start` (`auth-signin`) → Google →
+`/oauth2/callback`. It reuses the cluster's shared Google OAuth client and
+restricts logins to `--email-domain=whitediver.com`. `--redirect-url`,
+`--cookie-domain`, `--whitelist-domain` are all `books.whitediver.keenetic.link`.
+`--cookie-secure=false` because the Keenetic router terminates TLS and forwards
+plain HTTP to nginx (same reason every ingress here sets `ssl-redirect: "false"`).
+
+> The shared Google OAuth client **must list the redirect URI**
+> `https://books.whitediver.keenetic.link/oauth2/callback`, and the Keenetic
+> router/DNS must route `books.whitediver.keenetic.link` to the cluster (as it
+> already does for `photos.`/`dev.`/etc.).
 
 oauth2-proxy is pinned to `kube-master` (`nodeSelector`) because that is the
 only node here that reaches `quay.io` (its CDN times out from the workers);
 every other image in this stack is on ghcr.io/docker.io, which the workers can
 pull.
 
-Calibre-Web is served under the `/calibre-web` subpath, so it has its **own**
-Ingress (`opds-shelf-calibreweb`) that injects `X-Script-Name: /calibre-web`
-(`configuration-snippet`). Calibre-Web reads that header to prefix every
-generated URL/redirect — without it, links point at `/admin/...` on the root
-host and 404. `/calibre` (the KasmVNC desktop) is a separate Ingress and does
-**not** get this header.
+After Google you still hit Calibre-Web's **own** login (default
+`admin`/`admin123` — change it). To make the proxy the only gate, configure
+Calibre-Web's reverse-proxy login header instead.
 
 ## Calibre-Web first run (one-time, on the config PVC — not git)
 

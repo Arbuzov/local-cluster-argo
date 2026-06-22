@@ -13,8 +13,8 @@ under `media/` automatically.
 | `<service>/application.yaml` | `Application` | One app each (`project: media`) |
 
 Services: `photoprism` (serves `photos.whitediver.keenetic.link`) and
-`opds-shelf` (`dev.whitediver.keenetic.link/{calibre-web,calibre,opds}`) are
-deployed; `jellyfin` and `pigallery2` are **kept in git but held back** via the
+`opds-shelf` (Calibre-Web at `books.whitediver.keenetic.link`, OPDS feed at
+`dev.whitediver.keenetic.link/opds`) are deployed; `jellyfin` and `pigallery2` are **kept in git but held back** via the
 `exclude` glob in `bootstrap.yaml`. The app-of-apps itself stays in the
 `default` project so it can create the `media` AppProject.
 

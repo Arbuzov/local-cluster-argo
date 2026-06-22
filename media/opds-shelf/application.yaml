@@ -214,9 +214,9 @@ spec:
             - --reverse-proxy=true
             - --cookie-secure=false
             - --skip-provider-button=true
-            - --redirect-url=https://dev.whitediver.keenetic.link/oauth2/callback
-            - --whitelist-domain=dev.whitediver.keenetic.link
-            - --cookie-domain=dev.whitediver.keenetic.link
+            - --redirect-url=https://books.whitediver.keenetic.link/oauth2/callback
+            - --whitelist-domain=books.whitediver.keenetic.link
+            - --cookie-domain=books.whitediver.keenetic.link
             - --upstream=static://200
           env:
             - name: OAUTH2_PROXY_CLIENT_ID
@@ -276,7 +276,7 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-    - host: dev.whitediver.keenetic.link
+    - host: books.whitediver.keenetic.link
       http:
         paths:
           - path: /oauth2
@@ -296,46 +296,20 @@ metadata:
     nginx.ingress.kubernetes.io/ssl-redirect: "false"
     nginx.ingress.kubernetes.io/proxy-body-size: "100m"
     nginx.ingress.kubernetes.io/auth-url: "http://opds-shelf-oauth2.opds-shelf.svc.cluster.local:4180/oauth2/auth"
-    nginx.ingress.kubernetes.io/auth-signin: "https://dev.whitediver.keenetic.link/oauth2/start?rd=$escaped_request_uri"
-    nginx.ingress.kubernetes.io/configuration-snippet: |
-      proxy_set_header X-Script-Name /calibre-web;
+    nginx.ingress.kubernetes.io/auth-signin: "https://books.whitediver.keenetic.link/oauth2/start?rd=$escaped_request_uri"
 spec:
   ingressClassName: nginx
   rules:
-    - host: dev.whitediver.keenetic.link
+    - host: books.whitediver.keenetic.link
       http:
         paths:
-          - path: /calibre-web
+          - path: /
             pathType: Prefix
             backend:
               service:
                 name: opds-shelf-calibreweb
                 port:
                   number: 8083
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: opds-shelf-calibre
-  namespace: opds-shelf
-  annotations:
-    nginx.ingress.kubernetes.io/ssl-redirect: "false"
-    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
-    nginx.ingress.kubernetes.io/auth-url: "http://opds-shelf-oauth2.opds-shelf.svc.cluster.local:4180/oauth2/auth"
-    nginx.ingress.kubernetes.io/auth-signin: "https://dev.whitediver.keenetic.link/oauth2/start?rd=$escaped_request_uri"
-spec:
-  ingressClassName: nginx
-  rules:
-    - host: dev.whitediver.keenetic.link
-      http:
-        paths:
-          - path: /calibre
-            pathType: Prefix
-            backend:
-              service:
-                name: opds-shelf-calibre
-                port:
-                  number: 8080
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
