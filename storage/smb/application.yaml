@@ -1,0 +1,256 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: smb
+  namespace: argo-cd
+spec:
+  project: default
+  source:
+    repoURL: https://k8s-at-home.com/charts/
+    targetRevision: 6.2.2
+    helm:
+      values: |
+        wsdd:
+          enabled: true
+        env:
+          TZ: UTC
+          WSDD2_ENABLE: '1'
+          SAMBA_LOG_LEVEL: '2'
+          # Samba auth comes from the existing `smbcreds` Secret (namespace smb) —
+          # the same credentials the CSI driver and other workloads use to mount
+          # these shares, so it is the single source of truth. The crazy-max/samba
+          # image interpolates ${VAR} inside config.yml at runtime, so the password
+          # never lands in git nor in the rendered ConfigMap. See README.md.
+          SAMBA_USER:
+            valueFrom:
+              secretKeyRef:
+                name: smbcreds
+                key: username
+          SAMBA_PASSWORD:
+            valueFrom:
+              secretKeyRef:
+                name: smbcreds
+                key: password
+        image:
+          tag: 4.21.4
+        hostNetwork: true
+        dnsPolicy: ClusterFirstWithHostNet
+        securityContext:
+          capabilities:
+            add:
+              - NET_ADMIN
+              - NET_RAW
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+        service:
+          main:
+            ports:
+              wsdd-udp:
+                enabled: true
+                protocol: UDP
+                port: 3702
+              wsdd-tcp:
+                enabled: true
+                protocol: TCP
+                port: 3702
+              tcp:
+                enabled: true
+                protocol: TCP
+                port: 445
+              netbios:
+                enabled: true
+                protocol: TCP
+                port: 139
+              netbios-udp-138:
+                enabled: true
+                protocol: UDP
+                port: 138
+              netbios-udp-137:
+                enabled: true
+                protocol: UDP
+                port: 137
+            type: LoadBalancer
+            externalIPs:
+              - 192.168.99.44
+        configmap:
+          config:
+            enabled: true
+            data:
+              config.yml: |
+                auth:
+                  # user/password are interpolated from env ${SAMBA_USER} /
+                  # ${SAMBA_PASSWORD} by the crazy-max/samba image at runtime
+                  # (see the env: block above, sourced from the `smbcreds`
+                  # Secret). No cleartext credential in git or in the ConfigMap.
+                  - user: ${SAMBA_USER}
+                    group: ${SAMBA_USER}
+                    uid: 1000
+                    gid: 1000
+                    password: ${SAMBA_PASSWORD}
+                global:
+                  - "netbios name = 192.168.99.44"
+                  - "workgroup = WORKGROUP"
+                  - "local master = yes"
+                  - "preferred master = yes"
+                  - "os level = 255"
+                  - "wins support = yes"
+                  - "server min protocol = SMB3"
+                  - "server max protocol = SMB3_11"
+                  - "smb3 unix extensions = no"
+                  - "ea support = yes"
+                  - "socket options = TCP_NODELAY IPTOS_LOWDELAY SO_RCVBUF=131072 SO_SNDBUF=131072"
+                  - "read raw = yes"
+                  - "write raw = yes"
+                  - "max xmit = 131072"
+                  - "dead time = 15"
+                  - "getwd cache = yes"
+                  - "use sendfile = yes"
+                  - "strict allocate = no"
+                  - "allocation roundup size = 4194304"
+                  - "min receivefile size = 65536"
+                  - "aio read size = 65536"
+                  - "aio write size = 65536"
+                  - "use mmap = yes"
+                  - "large readwrite = yes"
+                  - "kernel oplocks = no"
+                  - "oplocks = yes"
+                  - "level2 oplocks = yes"
+                  - "wide links = no"
+                  - "unix extensions = no"
+                  - "follow symlinks = no"
+                  - "max connections = 0"
+                  - "max disk size = 0"
+                wsdd:
+                  enabled: true
+                  netbios_name: "192.168.99.44"
+                  workgroup: "WORKGROUP"
+                share:
+                  - name: homeassistant-backup
+                    path: /share/samba/main/homeassistant-backup
+                    browsable: yes
+                    readonly: no
+                    guestok: yes
+                    veto: no
+                  - name: homeassistant-media
+                    path: /share/samba/main/homeassistant-media
+                    browsable: yes
+                    readonly: no
+                    guestok: yes
+                    veto: no
+                  - name: homeassistant-shared
+                    path: /share/samba/main/homeassistant-shared
+                    browsable: yes
+                    readonly: no
+                    guestok: yes
+                    veto: no
+                  - name: llms
+                    path: /share/samba/main/llms
+                    browsable: yes
+                  - name: pictures
+                    path: /share/samba/main/pictures
+                    browsable: yes
+                    readonly: no
+                    guestok: yes
+                  - name: music
+                    path: /share/samba/main/music
+                    browsable: yes
+                    readonly: no
+                    guestok: yes
+                  - name: videos
+                    path: /share/samba/main/videos
+                    browsable: yes
+                    readonly: no
+                    guestok: yes
+                    veto: no
+                  - name: books
+                    path: /share/samba/main/books
+                    browsable: yes
+                    readonly: no
+                    guestok: yes
+                    veto: no
+                  - name: firefly-iii
+                    path: /share/samba/main/firefly-iii
+                    browsable: yes
+                    readonly: no
+                    guestok: yes
+                    veto: no
+                  - name: smb-csi
+                    path: /share/samba/main/smb-csi
+                    browsable: yes
+                    readonly: no
+                    guestok: no
+                    veto: no
+                    options:
+                      - "valid users = ${SAMBA_USER}"
+                      - "admin users = ${SAMBA_USER}"
+                      - "create mask = 0770"
+                      - "directory mask = 0770"
+        persistence:
+          homeassistant-backup:
+            enabled: true
+            type: hostPath
+            hostPath: /srv/kubernetes/nfs/homeassistant-backup
+            mountPath: /share/samba/main/homeassistant-backup
+          homeassistant-media:
+            enabled: true
+            type: hostPath
+            hostPath: /srv/kubernetes/nfs/homeassistant-media
+            mountPath: /share/samba/main/homeassistant-media
+          homeassistant-shared:
+            enabled: true
+            type: hostPath
+            hostPath: /srv/kubernetes/nfs/homeassistant-shared
+            mountPath: /share/samba/main/homeassistant-shared
+          llms:
+            enabled: true
+            type: hostPath
+            hostPath: /srv/kubernetes/nfs/llms
+            mountPath: /share/samba/main/llms
+          pictures:
+            enabled: true
+            type: hostPath
+            hostPath: /srv/kubernetes/nfs/pictures
+            mountPath: /share/samba/main/pictures
+          music:
+            enabled: true
+            type: hostPath
+            hostPath: /srv/kubernetes/nfs/music
+            mountPath: /share/samba/main/music
+          videos:
+            enabled: true
+            type: hostPath
+            hostPath: /srv/kubernetes/nfs/videos
+            mountPath: /share/samba/main/videos
+          books:
+            enabled: true
+            type: hostPath
+            hostPath: /srv/kubernetes/nfs/books
+            mountPath: /share/samba/main/books
+          firefly-iii:
+            enabled: true
+            type: hostPath
+            hostPath: /srv/kubernetes/nfs/firefly-iii
+            mountPath: /share/samba/main/firefly-iii
+          smb-csi:
+            enabled: true
+            type: hostPath
+            hostPath: /srv/kubernetes/nfs/smb-csi
+            mountPath: /share/samba/main/smb-csi
+        nodeSelector:
+          kubernetes.io/hostname: kube-master
+    chart: samba
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: smb
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

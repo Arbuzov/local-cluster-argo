@@ -1,0 +1,79 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: influxdb
+  namespace: argo-cd
+spec:
+  project: default
+  source:
+    repoURL: https://helm.influxdata.com/
+    targetRevision: 4.12.1
+    chart: influxdb
+    helm:
+      values: |
+        image:
+          repository: arm64v8/influxdb
+          tag: 1.8.10
+        service:
+          type: LoadBalancer
+          loadBalancerIP: "192.168.99.44"
+          externalIPs:
+            - 192.168.99.44
+        nodeAffinityPreset:
+          type: hard
+          key: kubernetes.io/hostname
+          values:
+          - kube-master
+        nodeSelector:
+          kubernetes.io/hostname: kube-master
+        persistence:
+          enabled: true
+          storageClass: "local-path"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "2Gi"
+            cpu: "250m"
+        # Slow WAL replay on this Pi-class node was killing the pod inside the
+        # default 60s liveness window, producing an ever-growing crash loop.
+        livenessProbe:
+          path: "/ping"
+          initialDelaySeconds: 600
+          timeoutSeconds: 5
+        startupProbe:
+          enabled: true
+          path: "/ping"
+          failureThreshold: 120
+          periodSeconds: 10
+        config:
+          monitor:
+            store-enabled: false
+          # Tighten in-memory cache and force WAL → TSM snapshots aggressively
+          # so WAL replay after a restart doesn't load tens of MBs back into RAM.
+          # Memory limit was bumped to 2Gi because the inmem index for the
+          # homeassistant DB doesn't fit in 1Gi during catch-up write storms.
+          data:
+            cache-max-memory-size: "128m"
+            cache-snapshot-memory-size: "5m"
+            cache-snapshot-write-cold-duration: "10s"
+            max-concurrent-compactions: 1
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: influxdb
+  ignoreDifferences:
+    # Chart renders volumeClaimTemplates with `annotations: null`; the API
+    # server stores them as absent. VCTs are immutable on a StatefulSet so
+    # there's nothing Argo CD could fix anyway.
+    - group: apps
+      kind: StatefulSet
+      jsonPointers:
+        - /spec/volumeClaimTemplates
+  syncPolicy:
+    automated:
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - ServerSideDiff=true

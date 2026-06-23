@@ -1,0 +1,59 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: prometheus
+  namespace: argo-cd
+spec:
+  project: default
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: prometheus
+    targetRevision: 28.7.0
+    helm:
+      values: |
+        server:
+          statefulSet:
+            enabled: false
+          persistentVolume:
+            enabled: false
+          persistent:
+            enabled: false
+          ingress:
+            enabled: true
+            ingressClassName: nginx
+            hosts: ['dev.whitediver.keenetic.link', '']
+            path: /prometheus
+            tls:
+              - secretName: dev.whitediver.keenetic.link-tls
+                hosts: ['dev.whitediver.keenetic.link']
+          baseURL: /prometheus
+          prefixURL: /prometheus
+          resources:
+            limits:
+              cpu: 150m
+              memory: 768Mi
+            requests:
+              cpu: 150m
+              memory: 768Mi
+        alertmanager:
+          enabled: false
+          ingressClassName: "nginx"
+        forceNamespace: "prometheus"
+        prometheus-node-exporter:
+          resources:
+            limits:
+              cpu: 100m
+              memory: 32Mi
+            requests:
+              cpu: 100m
+              memory: 32Mi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: prometheus
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
