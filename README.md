@@ -36,17 +36,19 @@ Two delivery models live side by side:
 
 ### App-of-apps groups — pull-based GitOps
 
-`apps/`, `media/`, `mcp/` and `platform/` each ship a `bootstrap.yaml`
-app-of-apps that points Argo CD at this repo on GitHub over HTTPS and
-reconciles that group's `AppProject` (`<group>/project.yaml`, where the group
-has one) plus every enabled child `Application` automatically. Bootstrap each
-once, after the repo is pushed to GitHub:
+`apps/`, `media/`, `mcp/`, `platform/` and `storage/` each ship a
+`bootstrap.yaml` app-of-apps that points Argo CD at this repo on GitHub over
+HTTPS and reconciles that group's `AppProject` (`<group>/project.yaml`, where
+the group has one — `media/` and `storage/` have none, so their children stay
+in `default`) plus every enabled child `Application` automatically. Bootstrap
+each once, after the repo is pushed to GitHub:
 
 ```sh
 kubectl apply -f apps/bootstrap.yaml
 kubectl apply -f media/bootstrap.yaml
 kubectl apply -f mcp/bootstrap.yaml
 kubectl apply -f platform/bootstrap.yaml
+kubectl apply -f storage/bootstrap.yaml
 ```
 
 From then on Argo CD watches `main`: edit a `<group>/<service>/application.yaml`,
@@ -161,7 +163,10 @@ When standing up a fresh cluster:
    (the self-managing `argo-cd` child) and deploys `arc-operator`. Create
    `arc-operator`'s `controller-manager` Secret first (see
    `platform/arc-operator/README.md`).
-4. Bring up `storage/smb` next — most other workloads mount its shares.
+4. Bring up storage next — most other workloads mount `storage/smb`'s shares.
+   Create its `smbcreds` Secret (see `storage/smb/README.md`), then
+   `kubectl apply -f storage/bootstrap.yaml` to bring up the `storage`
+   app-of-apps, which syncs `smb` on its own.
 5. Then `platform/metrics-server`, `platform/kubernetes-dashboard` — still
    push-based for now (held back by the `platform` app-of-apps `exclude`
    glob), so apply each directly.

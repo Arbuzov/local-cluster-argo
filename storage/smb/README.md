@@ -32,12 +32,12 @@ kubectl -n smb create secret generic smbcreds \
   --from-literal=password='<samba-password>'
 ```
 
-Then apply the Application normally — there is no longer an
-`application.local.yaml`:
-
-```sh
-kubectl apply -f storage/smb/application.yaml
-```
+This service is **pull-based GitOps** via the `storage/` app-of-apps
+(`storage/bootstrap.yaml`). Once `smbcreds` exists, just commit and push the
+manifest — Argo CD creates and syncs the `smb` child on its own; no manual
+`kubectl apply -f storage/smb/application.yaml`. (Only the one-time
+`kubectl apply -f storage/bootstrap.yaml` registers the app-of-apps, since it
+never manages itself — see `storage/README.md`.)
 
 To rotate: update `smbcreds` and `kubectl rollout restart` the samba
 Deployment (the image expands `${VAR}` only at container start).
