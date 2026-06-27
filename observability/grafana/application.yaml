@@ -1,0 +1,88 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: grafana
+  namespace: argo-cd
+spec:
+  project: default
+  source:
+    repoURL: https://grafana.github.io/helm-charts
+    chart: grafana
+    targetRevision: 10.5.14
+    helm:
+      values: |
+        replicas: 1
+        deploymentStrategy:
+          type: Recreate
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 999
+          runAsGroup: 999
+          fsGroup: 999
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            memory: 512Mi
+        testFramework:
+          enabled: false
+        envValueFrom:
+          GF_AUTH_GOOGLE_CLIENT_SECRET:
+            secretKeyRef:
+              name: grafana-oauth
+              key: client_secret
+        persistence:
+          enabled: true
+          type: pvc
+          storageClassName: smb
+          accessModes:
+            - ReadWriteOnce
+          size: 10Gi
+        initChownData:
+          enabled: false
+        ingress:
+          enabled: true
+          ingressClassName: nginx
+          annotations:
+            nginx.ingress.kubernetes.io/ssl-redirect: "false"
+          path: /grafana
+          pathType: Prefix
+          hosts:
+            - dev.whitediver.keenetic.link
+          tls:
+            - secretName: chart-grafana-tls
+              hosts:
+                - dev.whitediver.keenetic.link
+        grafana.ini:
+          server:
+            domain: dev.whitediver.keenetic.link
+            root_url: https://dev.whitediver.keenetic.link/grafana
+            serve_from_sub_path: true
+          security:
+            allow_embedding: true
+            cookie_secure: false
+            cookie_samesite: lax
+          users:
+            auto_assign_org_role: Admin
+          auth.google:
+            enabled: true
+            allow_sign_up: true
+            auto_login: true
+            client_id: "457232950309-a0kkupkhttff9qcvcipdhpn8bd8fv948.apps.googleusercontent.com"
+            scopes: "https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email"
+            auth_url: https://accounts.google.com/o/oauth2/auth
+            token_url: https://accounts.google.com/o/oauth2/token
+            allowed_domains: "whitediver.com dev.whitediver.keenetic.link grafana.whitediver.keenetic.link"
+            hosted_domain: grafana.whitediver.keenetic.link
+            use_pkce: true
+            skip_org_role_sync: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: grafana
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: true
+    syncOptions:
+      - CreateNamespace=true
