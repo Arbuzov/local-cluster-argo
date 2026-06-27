@@ -98,7 +98,7 @@ Google client id/secret and `active=1`; a pod restart then registers the
 > ConfigMap, so nginx derives `$pass_access_scheme` (→ `X-Scheme`) from the
 > router's `X-Forwarded-Proto: https`. (A per-ingress `X-Scheme` snippet does
 > **not** work — ingress-nginx overrides `$pass_access_scheme` internally.) That
-> controller lives in `local-cluster-helm` — persist the setting there (it's set
+> controller lives in `home-k8s-helm` — persist the setting there (it's set
 > at runtime here).
 >
 > **flask_dance + Google scope:** Google returns an extra `openid` scope, which

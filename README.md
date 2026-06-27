@@ -8,7 +8,7 @@ in the repo** (everything sensitive is injected out-of-band) and **data-safe
 enable/disable** of any service through pure GitOps.
 
 > Background: this is **stage 1** of a split from
-> [`local-cluster-helm`](https://github.com/Arbuzov/local-cluster-helm) — the
+> [`home-k8s-helm`](https://github.com/Arbuzov/home-k8s-helm) — the
 > `Application` resources moved here; the local Helm charts (Grafana, MinIO,
 > MySQL, wg-vless-gateway, wstunnel, …) still live in the original repo.
 
@@ -125,14 +125,15 @@ kubectl apply -f <group>/<service>/application.yaml
 Argo CD then reconciles the inline `helm.values` against the upstream chart
 it references.
 
-Two services are different:
+Two services pull their chart from the separate `home-k8s-helm` repo (where
+the local Helm charts live) rather than an upstream registry:
 
-- `networking/wg-vless-gateway` — chart still lives at
-  `Arbuzov/local-cluster-helm`, path `arbuzov/networking/wg-vless-gateway`
-- `networking/wstunnel` — chart still lives at
-  `Arbuzov/home-cluster-helm`, path `arbuzov/networking/wstunnel`
+- `networking/wg-vless-gateway` — chart at `Arbuzov/home-k8s-helm`,
+  path `arbuzov/networking/wg-vless-gateway`
+- `networking/wstunnel` — chart at `Arbuzov/home-k8s-helm`,
+  path `arbuzov/networking/wstunnel`
 
-For those two, a chart edit requires pushing the *other* repo before
+For those two, a chart edit requires pushing `home-k8s-helm` before
 Argo CD picks it up.
 
 ## Secrets handling
@@ -180,11 +181,11 @@ service's `README.md` has the concrete command):
 | `platform/arc-operator` | `controller-manager` (GitHub PAT)                                                |
 | `ai/n8n`                | `n8n-secrets` (encryption key), `postgres-n8n` (DB creds)                        |
 | `apps/heimdall`         | `heimdall-postgres` (DB creds)                                                   |
-| `apps/homepage`         | `homepage-secrets` (Argo CD homepage token, Home Assistant LLAT, bookmark URLs `HOMEPAGE_VAR_WORK_*` / `HOMEPAGE_VAR_PERSONAL_*`) |
+| `apps/homepage`         | `homepage-secrets` (Argo CD homepage token, Home Assistant LLAT), `homepage-bookmarks` (work-bookmark URLs `HOMEPAGE_VAR_WORK_*`) |
 | `apps/openclaw`         | `openclaw-env-secret`                                                            |
 | `apps/vikunja`          | `vikunja-oidc` (Google OIDC client ID/secret — shared with Argo CD)              |
-| `mcp/atlassian`         | `mcp-atlassian-{jira,confluence}-credentials` (incl. service URL), `mcp-atlassian-vpn-credentials`, `mcp-corp-routing` (VPN subnet) |
-| `mcp/gitlab`            | `mcp-gitlab-credentials` (API URL + PAT), `mcp-gitlab-stateless`, `mcp-corp-routing`; held back — applied push-based from a gitignored overlay (see `mcp/gitlab/README.md`) |
+| `mcp/atlassian`         | `mcp-corp-config` (Jira/Confluence/GitLab URLs + VPN subnet, shared), `mcp-atlassian-{jira,confluence}-credentials`, `mcp-atlassian-vpn-credentials` |
+| `mcp/gitlab`            | `mcp-gitlab-credentials` (PAT), `mcp-gitlab-stateless`, `mcp-corp-config` (shared); held back — applied push-based from a gitignored overlay (see `mcp/gitlab/README.md`) |
 | `mcp/graphiti`          | `graphiti-neo4j-auth`, `graphiti-mcp-secrets` (Neo4j + OpenAI)                   |
 | `mcp/mcpo`              | `mcpo-secrets` (`config.json` incl. Home Assistant LLAT)                         |
 | `media/photoprism`      | `photoprism-basic-auth` (htpasswd)                                               |
@@ -207,7 +208,7 @@ Cluster-wide shared Secrets that several Applications expect to find:
 When standing up a fresh cluster:
 
 1. Install Argo CD with `helm` directly (the bootstrap values are still
-   in `local-cluster-helm/arbuzov/platform/argo-cd/values.yaml`).
+   in `home-k8s-helm/arbuzov/platform/argo-cd/values.yaml`).
 2. Create `argocd-secret` in the `argo-cd` namespace
    (see `platform/argo-cd/README.md`).
 3. `kubectl apply -f platform/bootstrap.yaml` to bring up the `platform`
@@ -230,7 +231,7 @@ When standing up a fresh cluster:
 - Local Helm charts (`observability/grafana`, `storage/{minio,mysql}`,
   `observability/keenetic-grafana-monitoring`'s wrapper chart,
   `networking/wg-vless-gateway`, `networking/wstunnel`) — they stay in
-  `local-cluster-helm`. Two of those (wg-vless-gateway, wstunnel) are
+  `home-k8s-helm`. Two of those (wg-vless-gateway, wstunnel) are
   consumed by Applications **here**.
-- Cluster bootstrap (`local-cluster-ansible`).
-- One-off scripts (`local-cluster-helm/tools/`).
+- Cluster bootstrap (`home-k8s-ansible`).
+- One-off scripts (`home-k8s-helm/tools/`).

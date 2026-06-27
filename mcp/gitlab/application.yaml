@@ -29,7 +29,7 @@ spec:
           NODE_TLS_REJECT_UNAUTHORIZED: '0'
         envSecrets:
           GITLAB_API_URL:
-            secretName: mcp-gitlab-credentials
+            secretName: mcp-corp-config
             secretKey: GITLAB_API_URL
           OAUTH_STATELESS_SECRET:
             secretName: mcp-gitlab-stateless
@@ -62,7 +62,7 @@ spec:
               - name: CORP_CIDR
                 valueFrom:
                   secretKeyRef:
-                    name: mcp-corp-routing
+                    name: mcp-corp-config
                     key: CIDR
             args:
               - |

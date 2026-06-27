@@ -28,33 +28,23 @@ spec:
           - name: HOMEPAGE_VAR_WORK_GITLAB_URL
             valueFrom:
               secretKeyRef:
-                name: homepage-secrets
+                name: homepage-bookmarks
                 key: HOMEPAGE_VAR_WORK_GITLAB_URL
           - name: HOMEPAGE_VAR_WORK_JENKINS_URL
             valueFrom:
               secretKeyRef:
-                name: homepage-secrets
+                name: homepage-bookmarks
                 key: HOMEPAGE_VAR_WORK_JENKINS_URL
           - name: HOMEPAGE_VAR_WORK_JIRA_URL
             valueFrom:
               secretKeyRef:
-                name: homepage-secrets
+                name: homepage-bookmarks
                 key: HOMEPAGE_VAR_WORK_JIRA_URL
           - name: HOMEPAGE_VAR_WORK_GRAFANA_URL
             valueFrom:
               secretKeyRef:
-                name: homepage-secrets
+                name: homepage-bookmarks
                 key: HOMEPAGE_VAR_WORK_GRAFANA_URL
-          - name: HOMEPAGE_VAR_PERSONAL_NEWS_URL
-            valueFrom:
-              secretKeyRef:
-                name: homepage-secrets
-                key: HOMEPAGE_VAR_PERSONAL_NEWS_URL
-          - name: HOMEPAGE_VAR_PERSONAL_BANK_URL
-            valueFrom:
-              secretKeyRef:
-                name: homepage-secrets
-                key: HOMEPAGE_VAR_PERSONAL_BANK_URL
         image:
           tag: v1.13.2
         config:
@@ -102,16 +92,16 @@ spec:
               - "Grafana (work)":
                 - icon: https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/Grafana_icon.svg/250px-Grafana_icon.svg.png
                   href: "{{HOMEPAGE_VAR_WORK_GRAFANA_URL}}"
-            - Personal:
-              - "News":
-                - icon: mdi-newspaper-variant
-                  href: "{{HOMEPAGE_VAR_PERSONAL_NEWS_URL}}"
+            - News:
+              - "RBC":
+                - icon: https://s0.rbk.ru/v1_static/images/common/logo.svg
+                  href: https://rbc.ru/
               - "Linkedin":
                 - icon: https://upload.wikimedia.org/wikipedia/commons/thumb/c/ca/LinkedIn_logo_initials.png/250px-LinkedIn_logo_initials.png
                   href: https://www.linkedin.com/
-              - "Bank":
-                - icon: mdi-bank
-                  href: "{{HOMEPAGE_VAR_PERSONAL_BANK_URL}}"
+              - "IDBank":
+                - icon: https://idbank.am/documents/IDBank_logo_300x300.png
+                  href: https://idbank.am/ru/
 
           services:
             - Multimedia:

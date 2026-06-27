@@ -29,5 +29,5 @@ applies both in one sync, and the children would fail without the project.
 ## sourceRepos
 
 The project whitelists two repos: this one (the app-of-apps reads child
-Application manifests from it) and `Arbuzov/home-cluster-helm`, the local
+Application manifests from it) and `Arbuzov/home-k8s-helm`, the local
 wrapper chart that the `keenetic-grafana-monitoring` Application pulls from.

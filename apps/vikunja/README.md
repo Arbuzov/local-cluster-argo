@@ -96,7 +96,7 @@ a single Google provider. The web UI shows only "Sign in with Google".
 
 - Reuses the **same Google OAuth client as ArgoCD** (client lives in
   Google Cloud Console; the clientID/secret originate from
-  `local-cluster-helm/arbuzov/platform/argo-cd/values.yaml`, Dex config).
+  `home-k8s-helm/arbuzov/platform/argo-cd/values.yaml`, Dex config).
   That client must list this redirect URI:
   `https://tasks.whitediver.keenetic.link/auth/openid/google`.
 - `authurl` is the **issuer** `https://accounts.google.com` (Vikunja does

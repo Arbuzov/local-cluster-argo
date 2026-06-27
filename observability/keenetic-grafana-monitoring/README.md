@@ -2,11 +2,11 @@
 
 Polls a Keenetic router and writes metrics into InfluxDB (visualized in
 Grafana). Deployed via the `observability` app-of-apps from the wrapper chart in
-`Arbuzov/home-cluster-helm` → `arbuzov/observability/keenetic-grafana-monitoring`.
+`Arbuzov/home-k8s-helm` → `arbuzov/observability/keenetic-grafana-monitoring`.
 
 ## Source
 
-`repoURL` points at the local wrapper chart in `home-cluster-helm`, not an
+`repoURL` points at the local wrapper chart in `home-k8s-helm`, not an
 upstream chart. The earlier `helm.influxdata.com/influxdb@0.1.0` reference was
 bogus and never resolved — don't switch back to it.
 

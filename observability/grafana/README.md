@@ -85,8 +85,8 @@ kubectl --context kubernetes-local apply -f grafana-oauth.secret.yaml
 > on backoff (up to ~5 min); force it with
 > `kubectl --context kubernetes-local -n grafana delete pod -l app.kubernetes.io/name=grafana`.
 
-**Note — same value still in `local-cluster-helm`.** This `client_secret` is also
-committed in the **private, single-user** `local-cluster-helm` repo (Argo CD dex
+**Note — same value still in `home-k8s-helm`.** This `client_secret` is also
+committed in the **private, single-user** `home-k8s-helm` repo (Argo CD dex
 config, same Google OAuth client), so moving it out-of-band here doesn't un-leak
 it there. That repo is being cleaned separately; given the private scope, rotating
 in Google Cloud Console is good hygiene but low-urgency. If you do rotate, update

@@ -15,7 +15,7 @@ it instead of each running their own OpenConnect sidecar.
 The chart lives in a **private** Helm repo at
 `arbuzov/networking/openconnect-gateway`, like the other `networking/` apps
 (`wstunnel`, `wg-vless-gateway`). Argo CD pulls it via the
-`repo-home-cluster-helm` credential. Edit the chart there and push; Argo CD picks
+`repo-home-k8s-helm` credential. Edit the chart there and push; Argo CD picks
 it up on the next sync. Only `application.yaml` lives here.
 
 ## Deploy (push-based, like the rest of `networking/`)

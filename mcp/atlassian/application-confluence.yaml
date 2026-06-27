@@ -27,7 +27,7 @@ spec:
           TRANSPORT: streamable-http
         envSecrets:
           CONFLUENCE_URL:
-            name: mcp-atlassian-confluence-credentials
+            name: mcp-corp-config
             key: CONFLUENCE_URL
           CONFLUENCE_USERNAME:
             name: mcp-atlassian-confluence-credentials
@@ -66,7 +66,7 @@ spec:
               - name: CORP_CIDR
                 valueFrom:
                   secretKeyRef:
-                    name: mcp-corp-routing
+                    name: mcp-corp-config
                     key: CIDR
             args:
               - |

@@ -26,7 +26,7 @@ spec:
           TRANSPORT: streamable-http
         envSecrets:
           JIRA_URL:
-            name: mcp-atlassian-jira-credentials
+            name: mcp-corp-config
             key: JIRA_URL
           JIRA_USERNAME:
             name: mcp-atlassian-jira-credentials

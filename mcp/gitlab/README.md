@@ -47,8 +47,8 @@ run its own OpenConnect tunnel — it routes the corp subnet through the shared
 
 - a **`route-manager`** sidecar keeps `ip route replace <corp-subnet> via
   <gateway-pod-ip>` pointed at the gateway's headless Service. The subnet is
-  injected as `CORP_CIDR` from the `mcp-corp-routing` Secret, so it never lands
-  in git;
+  injected as `CORP_CIDR` from the shared `mcp-corp-config` Secret, so it never
+  lands in git;
 - **`podAffinity`** co-locates this pod with the gateway, because the route's
   pod-IP next-hop is only on-link when both share a node — off-node it fails with
   `Network unreachable` and corp traffic never reaches the VPN (previously it
@@ -82,20 +82,16 @@ kubectl apply -f mcp/gitlab/application.local.yaml
 
 ## Required out-of-band secrets
 
-Two are shared with the atlassian apps (`mcp-atlassian-vpn-credentials`,
-`mcp-basic-auth` — see `mcp/atlassian/README.md`). The rest are specific to this
-app:
+Shared with the atlassian apps: `mcp-corp-config` (holds this app's
+`GITLAB_API_URL` + `CIDR`), `mcp-atlassian-vpn-credentials`, and `mcp-basic-auth`
+— see [`mcp/atlassian/README.md`](../atlassian/README.md). The rest are specific
+to this app:
 
 ```sh
-# GitLab API URL + personal access token (api scope). The URL is kept out of git;
-# the token is read by the token-injector sidecar.
+# GitLab personal access token (api scope) — read by the token-injector sidecar.
+# (GITLAB_API_URL lives in the shared mcp-corp-config Secret, not here.)
 kubectl -n mcp create secret generic mcp-gitlab-credentials \
-  --from-literal=GITLAB_API_URL='https://<corp-gitlab>/api/v4' \
   --from-literal=GITLAB_PERSONAL_ACCESS_TOKEN='<your-gitlab-pat>'
-
-# Corp VPN subnet routed via the shared gateway (shared with the confluence app)
-kubectl -n mcp create secret generic mcp-corp-routing \
-  --from-literal=CIDR='<corp-subnet-cidr>'
 
 # Stateless session-sealing key (base64url, >=32 bytes). Must stay STABLE across
 # restarts — rotating it forces every client to re-initialise once:
