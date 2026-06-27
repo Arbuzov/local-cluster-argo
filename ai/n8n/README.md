@@ -98,13 +98,13 @@ but auth breaks):
 # 1. Create n8n-secrets with the EXISTING encryption key (NOT a fresh one —
 #    a new key makes every stored credential in the DB undecryptable):
 kubectl -n n8n create secret generic n8n-secrets \
-  --from-literal=N8N_ENCRYPTION_KEY='a_very_long_and_secure_key'
+  --from-literal=N8N_ENCRYPTION_KEY='<your-existing-n8n-encryption-key>'
 
 # 2. Make postgres-n8n an out-of-band Secret so prune won't delete it
 #    (it holds the right POSTGRES_DB/USER/PASSWORD):
 kubectl -n n8n create secret generic postgres-n8n \
   --from-literal=POSTGRES_DB=n8n --from-literal=POSTGRES_USER=n8n \
-  --from-literal=POSTGRES_PASSWORD=REDACTED-EXAMPLE-PW
+  --from-literal=POSTGRES_PASSWORD='<your-existing-postgres-password>'
 
 # 3. Register the app-of-apps (one-time, like the apps/mcp/platform roots):
 kubectl apply -f ai/bootstrap.yaml

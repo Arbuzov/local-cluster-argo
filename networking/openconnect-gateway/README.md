@@ -1,14 +1,18 @@
 # openconnect-gateway
 
-Single shared **OpenConnect VPN gateway**. One pod = one session to the corp
-concentrator (`vpn.corp.example`); the gitlab and confluence MCP pods route
-the corp subnet through it instead of each running their own OpenConnect sidecar.
+Single shared **OpenConnect VPN gateway**. One pod = one session to the corporate
+VPN concentrator; the gitlab and confluence MCP pods route the corp subnet through
+it instead of each running their own OpenConnect sidecar.
 
 > **Why:** those sidecars all logged in as the same corp user, and the
 > concentrator routes only **one** session per user — two live tunnels →
 > **both blackholed**. One shared session removes the conflict.
+>
+> **Employer-specific values are not in git.** The concentrator hostname, tunnel
+> group, and corp subnet live only in the (private) chart and in out-of-band
+> Secrets, never in this repo.
 
-The chart lives in the private **`home-cluster-helm`** repo at
+The chart lives in a **private** Helm repo at
 `arbuzov/networking/openconnect-gateway`, like the other `networking/` apps
 (`wstunnel`, `wg-vless-gateway`). Argo CD pulls it via the
 `repo-home-cluster-helm` credential. Edit the chart there and push; Argo CD picks
@@ -32,8 +36,8 @@ Service DNS) with its client pods.
 
 The gitlab and confluence Applications (`mcp/gitlab`, `mcp/atlassian`) no longer
 run an OpenConnect sidecar; each runs a small **route-manager** sidecar that
-keeps `ip route replace 10.20.0.0/24 via <gateway-pod-ip>` pointed at this
-gateway's headless Service. See those manifests and the chart README for detail.
+keeps `ip route replace <corp-subnet> via <gateway-pod-ip>` pointed at this
+gateway's headless Service. See those manifests for detail.
 
 ## Rollback
 

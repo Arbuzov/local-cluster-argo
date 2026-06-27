@@ -1,17 +1,15 @@
 # mcp-gitlab
 
 GitLab MCP server ([zereight050/gitlab-mcp](https://hub.docker.com/r/zereight050/gitlab-mcp),
-v2.1.20) at `/mcp/gitlab` on `dev.whitediver.keenetic.link`, talking to the corp
-GitLab at `gitlab.corp.example` over the shared openconnect-gateway VPN.
+v2.1.20) at `/mcp/gitlab` on `dev.whitediver.keenetic.link`, talking to a
+self-hosted GitLab behind a corporate VPN over the shared
+[`openconnect-gateway`](../../networking/openconnect-gateway/).
 
-> **Not** the same as `gitlab-sandbox.corp.example` (10.20.67.56) — that is a
-> separate gitlab-mcp instance in the corp sandbox, unrelated to this deployment.
-> This one is reached at `https://dev.whitediver.keenetic.link/mcp/gitlab`.
-
-History: this service was originally deployed by a hand-created Argo CD
-Application (chart `mcp-gitlab` 0.3.1) that was later deleted without its
-finalizer, leaving the Deployment/Service/Ingress orphaned in the cluster.
-This Application re-adopts those resources (same names and selectors).
+> **Employer-specific routing is not in git.** The real GitLab URL, the
+> VPN subnet, and the `/etc/hosts` pin live only in out-of-band Secrets and a
+> local overlay (this app is held back from the app-of-apps and applied
+> push-based — see **Out-of-band routing** below). The committed manifest
+> carries placeholders only.
 
 ## Image & auth (2.1.x: remote-auth + stateless + token-injector)
 
@@ -40,48 +38,64 @@ The app container holds no GitLab token; `mcp-gitlab-credentials` is read only b
 injector. To roll back to the 2.0.x static-PAT model, `git revert` the bump — Argo
 returns to `iwakitakuma/gitlab-mcp:2.0.19` (both Secrets are left intact).
 
-## Corp routing (shared VPN gateway) + hostAliases
+## Corp routing (shared VPN gateway)
 
-GitLab lives behind the corp VPN. Like the confluence app, this pod does **not**
-run its own OpenConnect tunnel — it routes `10.20.0.0/24` through the shared
+GitLab lives behind a corporate VPN. Like the confluence app, this pod does **not**
+run its own OpenConnect tunnel — it routes the corp subnet through the shared
 [`openconnect-gateway`](../../networking/openconnect-gateway/) pod (reusing the
 `mcp-atlassian-vpn-credentials` Secret):
 
-- a **`route-manager`** sidecar keeps `ip route replace 10.20.0.0/24 via
-  <gateway-pod-ip>` pointed at the gateway's headless Service;
+- a **`route-manager`** sidecar keeps `ip route replace <corp-subnet> via
+  <gateway-pod-ip>` pointed at the gateway's headless Service. The subnet is
+  injected as `CORP_CIDR` from the `mcp-corp-routing` Secret, so it never lands
+  in git;
 - **`podAffinity`** co-locates this pod with the gateway, because the route's
   pod-IP next-hop is only on-link when both share a node — off-node it fails with
   `Network unreachable` and corp traffic never reaches the VPN (previously it
   worked only because the scheduler happened to co-locate them).
 
-See [`networking/openconnect-gateway/chart/README.md`](../../networking/openconnect-gateway/chart/README.md)
-for the gateway internals.
+The self-hosted GitLab exists **only in corp DNS**, which neither cluster DNS nor
+the sidecar's resolver can reach — so the pod pins the hostname to its corp-VPN IP
+via `hostAliases`. That mapping is employer-specific, so it lives in the local
+overlay (below), not in git.
 
-Unlike `*.corp.example` names, `gitlab.corp.example` exists **only in corp
-DNS** (corp-dns.example, 10.20.30.21), which neither cluster DNS nor
-the sidecar's resolver can reach — the chart's `hostAliases` value pins it
-to 10.20.0.156 (`corp-host.example`) in `/etc/hosts` instead. If GitLab
-moves hosts, update that IP.
+> **Lesson learned — pick the right tunnel group:** the corp VPN concentrator
+> exposed several tunnel groups; only one actually passed traffic. The others
+> authenticated and established, then blackholed all TCP (only public-resolver
+> UDP/53 got through), which kept both this and the confluence MCP dead until the
+> sidecars were pointed at the working group. Others required MFA + a client cert
+> (what the desktop AnyConnect uses) or rejected these credentials outright.
 
-> **Gotcha — two concentrators (2026-06-12):** the `VPN_GROUP_A` tunnel
-> group exists on both `vpn.corp.example` (203.0.113.10) and
-> `vpn.corp.example` (.243), but only **asa1** passes traffic. On asa
-> the tunnel authenticates and establishes, then blackholes all TCP (only
-> UDP/53 to public resolvers gets through) — that kept both this and the
-> confluence MCP dead until the sidecars were pointed at asa1. The other
-> groups are no help for a sidecar: `DUO` needs MFA + client cert (what
-> AnyConnect on the workstation uses), `VPN_GROUP_C` rejects these
-> credentials, `VPN_GROUP_D` wants a client certificate.
+## Out-of-band routing (held back, push-based)
+
+Because the corp GitLab URL and `hostAliases` are employer-specific, this app is
+**excluded** from the `mcp` app-of-apps and applied directly, like the
+`networking/` apps:
+
+```sh
+kubectl apply -f mcp/gitlab/application.local.yaml
+```
+
+`application.local.yaml` is your real manifest (gitignored): it adds the
+`hostAliases` block pinning the corp hostname to its VPN IP. The committed
+`application.yaml` is a placeholder template with `hostAliases: []`.
 
 ## Required out-of-band secrets
 
 Two are shared with the atlassian apps (`mcp-atlassian-vpn-credentials`,
-`mcp-basic-auth` — see `mcp/atlassian/README.md`). Two are specific to this app:
+`mcp-basic-auth` — see `mcp/atlassian/README.md`). The rest are specific to this
+app:
 
 ```sh
-# GitLab personal access token (api scope) — read by the token-injector sidecar
+# GitLab API URL + personal access token (api scope). The URL is kept out of git;
+# the token is read by the token-injector sidecar.
 kubectl -n mcp create secret generic mcp-gitlab-credentials \
+  --from-literal=GITLAB_API_URL='https://<corp-gitlab>/api/v4' \
   --from-literal=GITLAB_PERSONAL_ACCESS_TOKEN='<your-gitlab-pat>'
+
+# Corp VPN subnet routed via the shared gateway (shared with the confluence app)
+kubectl -n mcp create secret generic mcp-corp-routing \
+  --from-literal=CIDR='<corp-subnet-cidr>'
 
 # Stateless session-sealing key (base64url, >=32 bytes). Must stay STABLE across
 # restarts — rotating it forces every client to re-initialise once:

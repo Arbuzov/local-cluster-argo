@@ -5,24 +5,29 @@ Two sibling Applications:
 - `application-jira.yaml`        → Jira MCP at `/mcp/jira`
 - `application-confluence.yaml`  → Confluence MCP at `/mcp/confluence`
 
-Confluence lives behind the corporate VPN, so its pod reaches it through the
+Confluence lives behind a corporate VPN, so its pod reaches it through the
 shared `openconnect-gateway` (see [`networking/openconnect-gateway/`](../../networking/openconnect-gateway/)),
 **not** a per-pod VPN sidecar — see **Confluence corp routing** below. Jira is
 reachable directly and needs none of this.
 
+> **Employer-specific values are not in git.** The real Jira/Confluence URLs and
+> the VPN subnet live only in out-of-band Secrets (`JIRA_URL`/`CONFLUENCE_URL`
+> are sourced from the credential Secrets; the route subnet from
+> `mcp-corp-routing`). The committed manifests carry no corp hostnames.
+
 ## Confluence corp routing (shared VPN gateway)
 
-`confluence.corp.example` (10.20.0.181, in 10.20.0.0/24) is only reachable
-over the corp VPN. Instead of running its own OpenConnect tunnel, the Confluence
-pod routes that subnet through the shared **`openconnect-gateway`** pod — one corp
-session for all clients (per-pod tunnels all logged in as the same user, and the
-concentrator routes only one session per user, so two live tunnels blackholed each
-other).
+Confluence is only reachable over the corp VPN. Instead of running its own
+OpenConnect tunnel, the Confluence pod routes the corp subnet through the shared
+**`openconnect-gateway`** pod — one corp session for all clients (per-pod tunnels
+all logged in as the same user, and the concentrator routes only one session per
+user, so two live tunnels blackholed each other).
 
 - **`route-manager` sidecar:** resolves the gateway's headless Service and keeps
-  `ip route replace 10.20.0.0/24 via <gateway-pod-ip>` in place, so the route
-  self-repairs if the gateway pod IP changes. `confluence.corp.example` still
-  resolves via cluster DNS; only the L3 path moves to the gateway.
+  `ip route replace <corp-subnet> via <gateway-pod-ip>` in place, so the route
+  self-repairs if the gateway pod IP changes. The subnet is injected as
+  `CORP_CIDR` from the `mcp-corp-routing` Secret, so it never lands in git.
+  Confluence still resolves via cluster DNS; only the L3 path moves to the gateway.
 - **`podAffinity` (co-location):** the route's next-hop is the gateway **pod IP**,
   which is only on-link — and thus a usable route — when this pod shares the
   gateway's node. So the pod uses `podAffinity` to follow the gateway onto whichever
@@ -30,21 +35,24 @@ other).
   route fails with `Network unreachable` (and `onlink` doesn't help — ARP for the
   cross-node next-hop never resolves) and corp traffic never reaches the VPN.
 
-VPN credentials, cert pinning, node placement, and gateway internals are documented
-in [`networking/openconnect-gateway/chart/README.md`](../../networking/openconnect-gateway/chart/README.md).
+VPN credentials, node placement, and gateway internals are documented in
+[`networking/openconnect-gateway/README.md`](../../networking/openconnect-gateway/README.md).
 
 ## Required out-of-band secrets
 
-Three Secrets in the `mcp` namespace — create before first sync:
+Three Secrets in the `mcp` namespace — create before first sync. The service
+URLs are kept out of git and supplied here alongside the credentials:
 
 ```sh
-# Jira API token + username (Atlassian PAT, NOT the password)
+# Jira URL + API token + username (Atlassian PAT, NOT the password)
 kubectl -n mcp create secret generic mcp-atlassian-jira-credentials \
+  --from-literal=JIRA_URL='https://<your-jira-host>' \
   --from-literal=JIRA_USERNAME='<your-atlassian-username>' \
   --from-literal=JIRA_API_TOKEN='<your-atlassian-api-token>'
 
 # Confluence — same shape
 kubectl -n mcp create secret generic mcp-atlassian-confluence-credentials \
+  --from-literal=CONFLUENCE_URL='https://<your-confluence-host>' \
   --from-literal=CONFLUENCE_USERNAME='<your-atlassian-username>' \
   --from-literal=CONFLUENCE_API_TOKEN='<your-atlassian-api-token>'
 
@@ -53,10 +61,14 @@ kubectl -n mcp create secret generic mcp-atlassian-confluence-credentials \
 kubectl -n mcp create secret generic mcp-atlassian-vpn-credentials \
   --from-literal=USERNAME='<your-vpn-username>' \
   --from-literal=PASSWORD='<your-vpn-password>'
+
+# Corp VPN subnet routed via the shared gateway (shared with the gitlab app)
+kubectl -n mcp create secret generic mcp-corp-routing \
+  --from-literal=CIDR='<corp-subnet-cidr>'
 ```
 
 The Atlassian Cloud "API token" is generated at
-https://id.atlassian.com/manage-profile/security/api-tokens — it is not
+<https://id.atlassian.com/manage-profile/security/api-tokens> — it is not
 the same as your account password.
 
 ## Basic-auth on the ingress

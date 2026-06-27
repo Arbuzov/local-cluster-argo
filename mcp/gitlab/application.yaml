@@ -17,7 +17,6 @@ spec:
           repository: zereight050/gitlab-mcp
           tag: "2.1.20"
         env:
-          GITLAB_API_URL: https://gitlab.corp.example/api/v4
           STREAMABLE_HTTP: 'true'
           REMOTE_AUTHORIZATION: 'true'
           OAUTH_STATELESS_MODE: 'true'
@@ -29,13 +28,13 @@ spec:
           USE_PIPELINE: 'false'
           NODE_TLS_REJECT_UNAUTHORIZED: '0'
         envSecrets:
+          GITLAB_API_URL:
+            secretName: mcp-gitlab-credentials
+            secretKey: GITLAB_API_URL
           OAUTH_STATELESS_SECRET:
             secretName: mcp-gitlab-stateless
             secretKey: OAUTH_STATELESS_SECRET
-        hostAliases:
-          - ip: 10.20.0.156
-            hostnames:
-              - gitlab.corp.example
+        hostAliases: []
         affinity:
           podAffinity:
             requiredDuringSchedulingIgnoredDuringExecution:
@@ -59,10 +58,16 @@ spec:
           - name: route-manager
             image: docker.io/aw1cks/openconnect
             command: ["/bin/sh", "-c"]
+            env:
+              - name: CORP_CIDR
+                valueFrom:
+                  secretKeyRef:
+                    name: mcp-corp-routing
+                    key: CIDR
             args:
               - |
                 SVC=openconnect-gateway.mcp.svc.cluster.local
-                CIDR=10.20.0.0/24
+                CIDR="$CORP_CIDR"
                 while true; do
                   GW=$(getent hosts "$SVC" 2>/dev/null | awk '{print $1; exit}')
                   if [ -n "$GW" ]; then

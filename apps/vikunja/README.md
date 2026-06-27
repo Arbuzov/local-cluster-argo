@@ -6,7 +6,10 @@ chart tag, not the app version; latest as of Jun 2026. Note the upstream
 OCI tags are inconsistent: `1.0.0`/`1.1.0`/`2.0.0` have no prefix, but the
 newest is `v2.0.2` *with* a leading `v` — `targetRevision` must match the
 tag exactly). The `vikunja/vikunja`
-image is multi-arch (arm64 included).
+image is multi-arch (arm64 included). The **app** version is decoupled from the
+chart version: the manifest pins `image.tag: "latest"` (Vikunja `v2.3.0` at time
+of writing), so the running app can be newer than the chart's pinned default —
+that's why the OIDC notes below refer to `v2.3.0`, not the chart's `v2.0.2`.
 
 Everything in `helm.values` nests under the `vikunja:` key — that's how
 this chart is structured.
@@ -81,9 +84,9 @@ open('application.yaml','w').write(re.sub(r'customlogourl: ".*"', f'customlogour
 PY
 ```
 
-Then regenerate `application.local.yaml` (Google creds) and re-apply. A
-ConfigMap change does **not** auto-restart the pod — `kubectl rollout
-restart deploy/vikunja`. (The llama illustration on the login page is a
+Then re-apply `application.yaml` (the Google creds live in the `vikunja-oidc`
+Secret, not in a `.local.yaml`). A ConfigMap change does **not** auto-restart
+the pod — `kubectl rollout restart deploy/vikunja`. (The llama illustration on the login page is a
 separate built-in frontend asset and is not affected by `customlogourl`.)
 
 ## Auth — Google SSO (OIDC), local login disabled
@@ -122,7 +125,7 @@ a single Google provider. The web UI shows only "Sign in with Google".
 
 > ⚠️ **No UI fallback.** With local login off, a broken OIDC config locks
 > everyone out of the web UI. To recover, flip `auth.local.enabled: true`
-> in `application.local.yaml` and re-apply. User management still works
+> in `application.yaml` and re-apply. User management still works
 > out-of-band via the CLI regardless of UI auth:
 >
 > ```sh

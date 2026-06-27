@@ -25,6 +25,36 @@ spec:
               secretKeyRef:
                 name: homepage-secrets
                 key: HOMEPAGE_VAR_HA_TOKEN
+          - name: HOMEPAGE_VAR_WORK_GITLAB_URL
+            valueFrom:
+              secretKeyRef:
+                name: homepage-secrets
+                key: HOMEPAGE_VAR_WORK_GITLAB_URL
+          - name: HOMEPAGE_VAR_WORK_JENKINS_URL
+            valueFrom:
+              secretKeyRef:
+                name: homepage-secrets
+                key: HOMEPAGE_VAR_WORK_JENKINS_URL
+          - name: HOMEPAGE_VAR_WORK_JIRA_URL
+            valueFrom:
+              secretKeyRef:
+                name: homepage-secrets
+                key: HOMEPAGE_VAR_WORK_JIRA_URL
+          - name: HOMEPAGE_VAR_WORK_GRAFANA_URL
+            valueFrom:
+              secretKeyRef:
+                name: homepage-secrets
+                key: HOMEPAGE_VAR_WORK_GRAFANA_URL
+          - name: HOMEPAGE_VAR_PERSONAL_NEWS_URL
+            valueFrom:
+              secretKeyRef:
+                name: homepage-secrets
+                key: HOMEPAGE_VAR_PERSONAL_NEWS_URL
+          - name: HOMEPAGE_VAR_PERSONAL_BANK_URL
+            valueFrom:
+              secretKeyRef:
+                name: homepage-secrets
+                key: HOMEPAGE_VAR_PERSONAL_BANK_URL
         image:
           tag: v1.13.2
         config:
@@ -60,28 +90,28 @@ spec:
               - "Github Arbuzov":
                 - icon: https://github.com/favicon.ico
                   href: https://github.com/arbuzov
-              - "GitLab Corp":
+              - "GitLab (work)":
                 - icon: https://about.gitlab.com/images/press/gitlab-logo-500-rgb.png
-                  href: https://gitlab.corp.example/dashboard/home
-              - "Jenkins Corp":
-                - icon: https://jenkins.corp.example/favicon.ico
-                  href: https://jenkins.corp.example
-              - "Jira Corp":
-                - icon: https://jira.corp.example/favicon.ico
-                  href: https://jira.corp.example/secure/Dashboard.jspa
-              - "Dashboard Corp":
+                  href: "{{HOMEPAGE_VAR_WORK_GITLAB_URL}}"
+              - "Jenkins (work)":
+                - icon: jenkins.png
+                  href: "{{HOMEPAGE_VAR_WORK_JENKINS_URL}}"
+              - "Jira (work)":
+                - icon: jira.png
+                  href: "{{HOMEPAGE_VAR_WORK_JIRA_URL}}"
+              - "Grafana (work)":
                 - icon: https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/Grafana_icon.svg/250px-Grafana_icon.svg.png
-                  href: https://dashboard.corp.example/grafana/d/REDACTED-DASHBOARD-ID/lab-overview
-            - News:
-              - "RBC":
-                - icon: https://s0.rbk.ru/v1_static/images/common/logo.svg
-                  href: https://rbc.ru/
+                  href: "{{HOMEPAGE_VAR_WORK_GRAFANA_URL}}"
+            - Personal:
+              - "News":
+                - icon: mdi-newspaper-variant
+                  href: "{{HOMEPAGE_VAR_PERSONAL_NEWS_URL}}"
               - "Linkedin":
                 - icon: https://upload.wikimedia.org/wikipedia/commons/thumb/c/ca/LinkedIn_logo_initials.png/250px-LinkedIn_logo_initials.png
                   href: https://www.linkedin.com/
-              - "IDBank":
-                - icon: https://idbank.am/documents/IDBank_logo_300x300.png
-                  href: https://idbank.am/ru/
+              - "Bank":
+                - icon: mdi-bank
+                  href: "{{HOMEPAGE_VAR_PERSONAL_BANK_URL}}"
 
           services:
             - Multimedia:

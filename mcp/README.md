@@ -83,9 +83,13 @@ List several to disable more at once:
 
 ### Currently excluded
 
-`graphiti`, `homeassistant`, and `kubernetes` are held back in the `exclude`
-glob. `homeassistant` and `kubernetes` use `mcp-helm` charts that currently run
-the server in **stdio** mode, which crashloops under Argo CD — they need a
-stdio→SSE (HTTP) bridge before they can be enabled. `graphiti` is a different
-chart (`bjw-s` `app-template`, a neo4j-backed server) and is held back
-separately. Remove each from `exclude` once it's ready to deploy.
+`graphiti`, `homeassistant`, `kubernetes`, and `gitlab` are held back in the
+`exclude` glob. `homeassistant` and `kubernetes` use `mcp-helm` charts that
+currently run the server in **stdio** mode, which crashloops under Argo CD — they
+need a stdio→SSE (HTTP) bridge before they can be enabled. `graphiti` is a
+different chart (`bjw-s` `app-template`, a neo4j-backed server) and is held back
+separately. `gitlab` is held back on purpose: its committed manifest is a
+placeholder (`hostAliases: []`) because the corp-DNS pin is employer-specific, so
+it is applied **push-based** from a gitignored `gitlab/application.local.yaml`
+overlay — see [`gitlab/README.md`](gitlab/README.md). Remove each from `exclude`
+once it's ready to deploy.

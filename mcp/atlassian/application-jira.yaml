@@ -21,11 +21,13 @@ spec:
           repository: ghcr.io/arbuzov/mcp-atlassian
           tag: 0.21.1-fork.1
         env:
-          JIRA_URL: https://jira.corp.example
           MCP_VERY_VERBOSE: true
           MCP_LOGGING_STDOUT: true
           TRANSPORT: streamable-http
         envSecrets:
+          JIRA_URL:
+            name: mcp-atlassian-jira-credentials
+            key: JIRA_URL
           JIRA_USERNAME:
             name: mcp-atlassian-jira-credentials
             key: JIRA_USERNAME

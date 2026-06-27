@@ -21,12 +21,14 @@ spec:
           repository: ghcr.io/arbuzov/mcp-atlassian
           tag: 0.21.1-fork.1
         env:
-          CONFLUENCE_URL: https://confluence.corp.example
           CONFLUENCE_SSL_VERIFY: 'false'
           MCP_VERY_VERBOSE: true
           MCP_LOGGING_STDOUT: true
           TRANSPORT: streamable-http
         envSecrets:
+          CONFLUENCE_URL:
+            name: mcp-atlassian-confluence-credentials
+            key: CONFLUENCE_URL
           CONFLUENCE_USERNAME:
             name: mcp-atlassian-confluence-credentials
             key: CONFLUENCE_USERNAME
@@ -60,10 +62,16 @@ spec:
           - name: route-manager
             image: docker.io/aw1cks/openconnect
             command: ["/bin/sh", "-c"]
+            env:
+              - name: CORP_CIDR
+                valueFrom:
+                  secretKeyRef:
+                    name: mcp-corp-routing
+                    key: CIDR
             args:
               - |
                 SVC=openconnect-gateway.mcp.svc.cluster.local
-                CIDR=10.20.0.0/24
+                CIDR="$CORP_CIDR"
                 while true; do
                   GW=$(getent hosts "$SVC" 2>/dev/null | awk '{print $1; exit}')
                   if [ -n "$GW" ]; then

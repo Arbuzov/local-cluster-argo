@@ -1,11 +1,60 @@
 # home-k8s-argo
 
-Argo CD `Application` manifests for the home-lab Kubernetes cluster
-(`kube-master` + `kube-worker-*`). This is **stage 1** of a split from
-[`local-cluster-helm`](https://github.com/Arbuzov/local-cluster-helm) —
-only the `Application` resources have been moved here; the local Helm
-charts (Grafana, MinIO, MySQL, wg-vless-gateway, wstunnel, …) still
-live in the original repo.
+A GitOps-managed home Kubernetes cluster (`kube-master` + `kube-worker-*`),
+described end-to-end as Argo CD `Application` manifests. Argo CD reconciles
+everything here straight from git — self-hosted apps, media, observability,
+Model Context Protocol servers, storage and networking — with **no credentials
+in the repo** (everything sensitive is injected out-of-band) and **data-safe
+enable/disable** of any service through pure GitOps.
+
+> Background: this is **stage 1** of a split from
+> [`local-cluster-helm`](https://github.com/Arbuzov/local-cluster-helm) — the
+> `Application` resources moved here; the local Helm charts (Grafana, MinIO,
+> MySQL, wg-vless-gateway, wstunnel, …) still live in the original repo.
+
+## Highlights
+
+A few of the more interesting engineering write-ups here — each lives in its
+service's own README:
+
+- **InfluxDB OOM-loop fix** — a 1849-restart crash loop on an 8 GB Pi-class
+  node, traced to the in-memory series index and fixed with on-disk `tsi1` +
+  deferred full compaction ([`observability/influxdb/`](observability/influxdb/README.md)).
+- **GitLab MCP behind a corporate VPN** — a `token-injector` sidecar that keeps
+  the PAT out of git, stateless OAuth sessions that survive pod restarts, and a
+  single shared VPN gateway (one session for all clients)
+  ([`mcp/gitlab/`](mcp/gitlab/README.md), [`networking/openconnect-gateway/`](networking/openconnect-gateway/README.md)).
+- **SQLite on SMB without corruption** — running Vikunja's SQLite over a CIFS
+  share via `nobrl`, uid/gid mount semantics, and single-replica discipline
+  ([`apps/vikunja/`](apps/vikunja/README.md)).
+- **Declarative secret hygiene** — two wiring styles that keep every password,
+  token and OIDC secret out of both git *and* rendered ConfigMaps
+  ([Secrets handling](#secrets-handling)).
+
+## Architecture
+
+```mermaid
+flowchart TD
+    GH[(home-k8s-argo on GitHub)]
+    ROUTER[Keenetic router<br/>KeenDNS · TLS termination]
+    subgraph CL[home cluster: kube-master + kube-worker-*]
+        ARGO[Argo CD<br/>app-of-apps]
+        ING[nginx ingress]
+        GROUPS[apps · ai · media · mcp<br/>observability · platform]
+        SMB[(SMB / CIFS storage)]
+        VPN[VPN gateways<br/>networking/]
+    end
+    GH -- manifests --> ARGO
+    ARGO -. pull-based sync .-> GH
+    ARGO --> GROUPS
+    ROUTER --> ING --> GROUPS
+    GROUPS --> SMB
+    GROUPS --> VPN
+```
+
+Two delivery models run side by side — **pull-based** app-of-apps groups that
+Argo CD watches on GitHub, and **push-based** groups applied with `kubectl`
+(see [How services are deployed](#how-services-are-deployed)).
 
 ## Layout
 
@@ -16,7 +65,7 @@ ai/             # AI / automation (n8n)
 apps/           # User-facing apps (heimdall, homepage, octoprint, openclaw)
 mcp/            # Model Context Protocol servers (atlassian, basic-memory, graphiti, kubernetes, mcpo)
 media/          # Media (jellyfin, opds-shelf, photoprism, pigallery2)
-networking/     # VPN / tunnels (wg-vless-gateway, wstunnel)
+networking/     # VPN / tunnels (openconnect-gateway, wg-vless-gateway, wstunnel)
 observability/  # Metrics / logs (influxdb, keenetic-grafana-monitoring, prometheus)
 platform/       # Cluster plumbing (argo-cd, arc-operator, kubernetes-dashboard, metrics-server)
 storage/        # Storage backends (smb)
@@ -131,10 +180,11 @@ service's `README.md` has the concrete command):
 | `platform/arc-operator` | `controller-manager` (GitHub PAT)                                                |
 | `ai/n8n`                | `n8n-secrets` (encryption key), `postgres-n8n` (DB creds)                        |
 | `apps/heimdall`         | `heimdall-postgres` (DB creds)                                                   |
-| `apps/homepage`         | `homepage-secrets` (Argo CD homepage token, Home Assistant LLAT)                 |
+| `apps/homepage`         | `homepage-secrets` (Argo CD homepage token, Home Assistant LLAT, bookmark URLs `HOMEPAGE_VAR_WORK_*` / `HOMEPAGE_VAR_PERSONAL_*`) |
 | `apps/openclaw`         | `openclaw-env-secret`                                                            |
 | `apps/vikunja`          | `vikunja-oidc` (Google OIDC client ID/secret — shared with Argo CD)              |
-| `mcp/atlassian`         | `mcp-atlassian-{jira,confluence}-credentials`, `mcp-atlassian-vpn-credentials`   |
+| `mcp/atlassian`         | `mcp-atlassian-{jira,confluence}-credentials` (incl. service URL), `mcp-atlassian-vpn-credentials`, `mcp-corp-routing` (VPN subnet) |
+| `mcp/gitlab`            | `mcp-gitlab-credentials` (API URL + PAT), `mcp-gitlab-stateless`, `mcp-corp-routing`; held back — applied push-based from a gitignored overlay (see `mcp/gitlab/README.md`) |
 | `mcp/graphiti`          | `graphiti-neo4j-auth`, `graphiti-mcp-secrets` (Neo4j + OpenAI)                   |
 | `mcp/mcpo`              | `mcpo-secrets` (`config.json` incl. Home Assistant LLAT)                         |
 | `media/photoprism`      | `photoprism-basic-auth` (htpasswd)                                               |
