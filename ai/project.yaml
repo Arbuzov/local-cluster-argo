@@ -8,11 +8,14 @@ metadata:
 spec:
   description: AI / automation apps — deployed via the ai app-of-apps (see ai/README.md)
   sourceRepos:
-    - git@github.com:Arbuzov/home-k8s-argo.git
+    - https://github.com/Arbuzov/home-k8s-argo.git
     - 8gears.container-registry.com/library
+    - ghcr.io/berriai
   destinations:
     - server: https://kubernetes.default.svc
       namespace: n8n
+    - server: https://kubernetes.default.svc
+      namespace: litellm
     - server: https://kubernetes.default.svc
       namespace: argo-cd
   clusterResourceWhitelist:

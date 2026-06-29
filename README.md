@@ -61,7 +61,7 @@ Argo CD watches on GitHub, and **push-based** groups applied with `kubectl`
 Top-level directories group services by role:
 
 ```
-ai/             # AI / automation (n8n)
+ai/             # AI / automation (n8n, litellm)
 apps/           # User-facing apps (heimdall, homepage, octoprint, openclaw)
 mcp/            # Model Context Protocol servers (atlassian, basic-memory, graphiti, kubernetes, mcpo)
 media/          # Media (jellyfin, opds-shelf, photoprism, pigallery2)
@@ -87,7 +87,7 @@ Two delivery models live side by side:
 
 ### App-of-apps groups — pull-based GitOps
 
-`apps/`, `media/`, `mcp/`, `platform/` and `storage/` each ship a
+`apps/`, `media/`, `mcp/`, `networking/`, `platform/` and `storage/` each ship a
 `bootstrap.yaml` app-of-apps that points Argo CD at this repo on GitHub over
 HTTPS and reconciles that group's `AppProject` (`<group>/project.yaml`, where
 the group has one — `media/` and `storage/` have none, so their children stay
@@ -98,6 +98,7 @@ each once, after the repo is pushed to GitHub:
 kubectl apply -f apps/bootstrap.yaml
 kubectl apply -f media/bootstrap.yaml
 kubectl apply -f mcp/bootstrap.yaml
+kubectl apply -f networking/bootstrap.yaml
 kubectl apply -f platform/bootstrap.yaml
 kubectl apply -f storage/bootstrap.yaml
 ```
@@ -110,7 +111,8 @@ in `default` so it can create that project. `media/` is the exception — it has
 no AppProject, so its children and its app-of-apps both stay in `default`. Each
 group's `README.md` documents which children are enabled vs. held back via the
 `bootstrap.yaml` `exclude` glob (`platform/` currently deploys only `argo-cd` +
-`arc-operator`; `media/` holds back `opds-shelf`).
+`arc-operator`; `media/` holds back `opds-shelf`; `networking/` deploys only
+`wg-vless-gateway`, holding back `openconnect-gateway` + `wstunnel`).
 
 ### Everything else — push-based
 
@@ -126,7 +128,9 @@ Argo CD then reconciles the inline `helm.values` against the upstream chart
 it references.
 
 Two services pull their chart from the separate `home-k8s-helm` repo (where
-the local Helm charts live) rather than an upstream registry:
+the local Helm charts live) rather than an upstream registry —
+`networking/wg-vless-gateway` (now app-of-apps managed) and
+`networking/wstunnel` (push-based):
 
 - `networking/wg-vless-gateway` — chart at `Arbuzov/home-k8s-helm`,
   path `arbuzov/networking/wg-vless-gateway`
@@ -180,6 +184,7 @@ service's `README.md` has the concrete command):
 | `platform/argo-cd`      | `argocd-secret` (admin bcrypt, Google OIDC client ID/secret), `argocd-redis`     |
 | `platform/arc-operator` | `controller-manager` (GitHub PAT)                                                |
 | `ai/n8n`                | `n8n-secrets` (encryption key), `postgres-n8n` (DB creds)                        |
+| `ai/litellm`            | `litellm-masterkey` (proxy master key), `litellm-env-secret` (backend API keys, e.g. `NVIDIA_NIM_API_KEY`) |
 | `apps/heimdall`         | `heimdall-postgres` (DB creds)                                                   |
 | `apps/homepage`         | `homepage-secrets` (Argo CD homepage token, Home Assistant LLAT), `homepage-bookmarks` (work-bookmark URLs `HOMEPAGE_VAR_WORK_*`) |
 | `apps/openclaw`         | `openclaw-env-secret`                                                            |

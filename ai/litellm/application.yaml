@@ -1,0 +1,54 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: litellm
+  namespace: argo-cd
+spec:
+  project: ai
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+  source:
+    repoURL: ghcr.io/berriai
+    targetRevision: 1.90.0
+    chart: litellm-helm
+    helm:
+      values: |
+        image:
+          repository: ghcr.io/berriai/litellm
+        masterkeySecretName: litellm-masterkey
+        masterkeySecretKey: masterkey
+        db:
+          deployStandalone: false
+          useExisting: false
+        migrationJob:
+          enabled: false
+        environmentSecrets:
+          - litellm-env-secret
+        proxy_config:
+          model_list:
+            - model_name: "nvidia_nim/*"
+              litellm_params:
+                model: "nvidia_nim/*"
+                api_key: os.environ/NVIDIA_NIM_API_KEY
+          general_settings:
+            master_key: os.environ/PROXY_MASTER_KEY
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        ingress:
+          enabled: true
+          className: nginx
+          hosts:
+            - host: litellm.whitediver.keenetic.link
+              paths:
+                - path: /
+                  pathType: Prefix
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: litellm
