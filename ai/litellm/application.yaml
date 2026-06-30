@@ -9,6 +9,8 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
   source:
     repoURL: ghcr.io/berriai
     targetRevision: 1.90.0
