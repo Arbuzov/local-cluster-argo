@@ -22,10 +22,28 @@ spec:
         masterkeySecretName: litellm-masterkey
         masterkeySecretKey: masterkey
         db:
-          deployStandalone: false
+          deployStandalone: true
           useExisting: false
+        postgresql:
+          auth:
+            username: litellm
+            database: litellm
+          primary:
+            persistence:
+              enabled: true
+              storageClass: local-path
+              size: 8Gi
+          image:
+            registry: docker.io
+            repository: bitnamilegacy/postgresql
+            tag: "16"
         migrationJob:
-          enabled: false
+          enabled: true
+          hooks:
+            argocd:
+              enabled: true
+            helm:
+              enabled: false
         environmentSecrets:
           - litellm-env-secret
         proxy_config:
